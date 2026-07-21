@@ -2,64 +2,63 @@
 
 ## URL
 
-L'URL est configurable afin de prendre en charge tout serveur WebDAV standard.
+The URL is configurable to support any standard WebDAV server.
 
-Preset Seedhost :
+Seedhost preset:
 
 `https://mud.seedhost.eu/<user>/webdav`
 
-Le preset fournit un modèle d'URL mais ne modifie pas le protocole ou le
-parsing.
+The preset supplies a URL template but does not change the protocol or parsing
+behavior.
 
-## Authentification
+## Authentication
 
 HTTP Basic.
 
-Pour le MVP, le mot de passe est demandé sans affichage au démarrage et gardé
-uniquement en mémoire pendant la session. Il n'est donc pas nécessaire de le
-ressaisir pour chaque dossier ou chaque vidéo.
+For the MVP, the password is requested without echo at startup and kept in
+memory for the session only. It does not need to be entered again for every
+directory or video.
 
-Une variable d'environnement peut fournir le secret dans un environnement
-automatisé. Elle ne doit pas être affichée ou journalisée. Le nom exact de la
-variable sera fixé lors de l'implémentation de la configuration.
+The `ARAG_PASSWORD` environment variable can provide the secret in automated
+environments. It must not be displayed, logged, or stored permanently in a
+configuration file.
 
-Le fichier de configuration ne contient jamais le mot de passe en clair. Le
-stockage dans le trousseau système est prévu après le MVP.
+The configuration file never contains the password in plain text. Storage in
+the operating system's secure credential store is planned after the MVP.
 
 ## Navigation
 
-Méthode : `PROPFIND`.
+Method: `PROPFIND`.
 
-Header : `Depth: 1`.
+Header: `Depth: 1`.
 
-Réponse attendue : `207 Multi-Status`.
+Expected response: `207 Multi-Status`.
 
-Les dossiers sont identifiés par `<D:collection/>`.
+Directories are identified by `<D:collection/>`.
 
-Les fichiers possèdent :
+Files may provide:
 
-- `getcontentlength` ;
-- `creationdate` ;
-- `getlastmodified` lorsque disponible ;
+- `getcontentlength`;
+- `creationdate`;
+- `getlastmodified`, when available;
 - `getetag`.
 
-Le parseur utilise les espaces de noms XML et ne dépend pas du préfixe `D`.
-Les propriétés peuvent être absentes. Le client ignore l'entrée représentant
-le dossier interrogé lui-même et retourne des objets Go à l'UI.
+The parser uses XML namespaces and does not depend on the `D` prefix.
+Properties may be missing. The client ignores the entry representing the
+requested directory itself and returns Go values to the UI.
 
-Le client ne parse jamais de HTML et n'utilise pas de page d'index comme
-solution de repli.
+The client never parses HTML or falls back to an HTML directory listing.
 
-## Réseau
+## Network behavior
 
-Valeurs par défaut proposées :
+Proposed default values:
 
-- 10 secondes pour la connexion et les en-têtes ;
-- 30 secondes pour terminer une requête `PROPFIND` de navigation.
+- 10 seconds for connection establishment and response headers;
+- 30 seconds to complete a navigation `PROPFIND` request.
 
-Une requête est annulée lorsque l'utilisateur quitte ou lorsqu'une nouvelle
-navigation rend son résultat obsolète. Une erreur de timeout est présentée
-séparément d'un refus d'authentification ou d'une réponse XML invalide.
+A request is canceled when the user exits or when a newer navigation action
+makes its result obsolete. Timeout errors are presented separately from
+authentication failures and invalid XML responses.
 
-Ces limites sont configurables. Elles concernent la navigation WebDAV, pas la
-durée de lecture d'un média dans le lecteur externe.
+These limits are configurable. They apply to WebDAV navigation, not to media
+playback duration in the external player.

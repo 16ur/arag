@@ -1,23 +1,44 @@
 # arag
 
-arag est un navigateur de fichiers WebDAV en terminal, écrit en Go avec
-Bubble Tea V2. Il permet de parcourir un serveur distant et d'ouvrir un média
-dans un lecteur externe.
+arag is a terminal WebDAV file browser written in Go with Bubble Tea V2. It
+lets users browse a remote server and open media in an external player.
 
-Le projet vise à fonctionner avec tout serveur WebDAV standard. Seedhost est
-le premier preset pris en charge, car il constitue le cas d'usage initial du
-projet.
+The project aims to work with any standard WebDAV server. Seedhost is the first
+supported preset because it is the project's initial use case.
 
-## État du projet
+## Project status
 
-arag est en cours de construction. Le MVP doit permettre de :
+arag is under development. The MVP will provide:
 
-- se connecter à un serveur WebDAV ;
-- parcourir les dossiers sans charger toute l'arborescence ;
-- naviguer avec les flèches ou `hjkl` ;
-- ouvrir une vidéo dans IINA après confirmation.
+- connection to a WebDAV server;
+- directory browsing without loading the entire tree;
+- navigation with the arrow keys or `hjkl`;
+- video playback in IINA after confirmation.
 
-IINA est le lecteur ciblé par le MVP, mais l'architecture permettra d'ajouter
-d'autres lecteurs, notamment VLC.
+IINA is the player targeted by the MVP, but the architecture will support
+other players, including VLC.
 
-Consulter la [roadmap](docs/ROADMAP.md) pour le périmètre prévu.
+See the [roadmap](docs/ROADMAP.md) for the planned scope.
+
+## Test a WebDAV connection
+
+The first functional command lists the contents of a WebDAV root:
+
+```bash
+go run ./cmd/arag \
+  -url "https://mud.seedhost.eu/USERNAME/webdav" \
+  -user "USERNAME"
+```
+
+The password is then requested without being displayed. It remains in memory
+only while the command is running and is not stored.
+
+To display all available options:
+
+```bash
+go run ./cmd/arag -h
+```
+
+For automated environments, the password can be provided through
+`ARAG_PASSWORD`. This is less secure than interactive input and should not be
+stored permanently in a configuration file or shell history.

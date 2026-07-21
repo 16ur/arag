@@ -1,40 +1,40 @@
 # MVP
 
-- [ ] configuration d'une URL WebDAV personnalisée
-- [ ] preset Seedhost
-- [ ] authentification HTTP Basic avec saisie masquée une fois par session
-- [ ] connexion WebDAV avec timeout et annulation
-- [ ] parser les réponses XML de PROPFIND
-- [ ] normaliser les URL et chemins retournés par le serveur
-- [ ] navigation lazy avec `Depth: 1`
-- [ ] navigation avec les flèches et `hjkl`
-- [ ] retour au dossier parent
-- [ ] états de chargement, vide et erreur
-- [ ] aide intégrée et raccourcis découvrables
-- [ ] affichage adapté aux petits terminaux et aux noms longs
-- [ ] confirmation avant l'ouverture d'une vidéo
-- [ ] ouverture dans IINA sans exposer les identifiants
-- [ ] tests unitaires du parseur XML
-- [ ] tests d'intégration avec un faux serveur WebDAV local
-- [ ] documentation d'installation et de configuration
+- [ ] custom WebDAV URL configuration
+- [ ] Seedhost preset
+- [ ] HTTP Basic authentication with hidden input once per session
+- [ ] WebDAV connection with timeout and cancellation
+- [ ] parse `PROPFIND` XML responses
+- [ ] normalize URLs and paths returned by the server
+- [ ] lazy navigation with `Depth: 1`
+- [ ] arrow-key and `hjkl` navigation
+- [ ] return to the parent directory
+- [ ] loading, empty, and error states
+- [ ] built-in help and discoverable shortcuts
+- [ ] layout suitable for small terminals and long names
+- [ ] confirmation before opening a video
+- [ ] open videos in IINA without exposing credentials
+- [ ] unit tests for the XML parser
+- [ ] integration tests with a local fake WebDAV server
+- [ ] installation and configuration documentation
 
 ---
 
 # V1
 
-- [ ] choix du lecteur externe
-- [ ] prise en charge de VLC
-- [ ] stockage optionnel dans le trousseau sécurisé du système
-- [ ] presets WebDAV supplémentaires
-- [ ] binaires précompilés pour les plateformes prises en charge
-- [ ] recherche dans le dossier courant
-- [ ] historique de navigation persistant
+- [ ] external player selection
+- [ ] VLC support
+- [ ] optional storage in the operating system's secure credential store
+- [ ] additional WebDAV presets
+- [ ] prebuilt binaries for supported platforms
+- [ ] search within the current directory
+- [ ] persistent navigation history
 
-## Critères de qualité
+## Quality criteria
 
-- [ ] aucune requête réseau ou logique métier dans `View()`
-- [ ] aucun secret dans les fichiers, logs ou messages d'erreur
-- [ ] aucune information transmise uniquement par la couleur
-- [ ] erreurs distinctes pour URL invalide, authentification refusée, serveur
-      indisponible et réponse WebDAV invalide
-- [ ] navigation utilisable sans connaître les raccourcis Vim
+- [ ] no network requests or business logic in `View()`
+- [ ] no secrets in files, logs, or error messages
+- [ ] no information communicated through color alone
+- [ ] distinct errors for invalid URLs, rejected authentication, unavailable
+      servers, and invalid WebDAV responses
+- [ ] navigation usable without knowing Vim shortcuts

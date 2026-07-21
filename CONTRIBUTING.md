@@ -1,24 +1,26 @@
-# Règles
+# Contributing
 
-Toujours préférer la simplicité.
+Always prefer simplicity.
 
-Pas d'abstraction prématurée.
+Do not introduce premature abstractions.
 
-Pas de dépendance inutile.
+Do not add unnecessary dependencies.
 
-Chaque package possède une responsabilité claire.
+Give each package a clear responsibility.
 
-Éviter les fonctions > 100 lignes.
+Avoid functions longer than 100 lines.
 
-Privilégier des noms explicites.
+Prefer explicit names.
 
-## Contraintes produit
+Write code, identifiers, comments, user-facing text, documentation, and commit
+messages in English.
 
-- conserver la compatibilité avec les serveurs WebDAV génériques ;
-- implémenter les particularités des fournisseurs sous forme de presets ;
-- ne jamais enregistrer ou journaliser un secret en clair ;
-- ne jamais lancer de requête réseau ou de logique métier dans `View()` ;
-- accompagner tout nouveau parsing WebDAV de tests XML ;
-- conserver les flèches directionnelles lorsque des raccourcis `hjkl` sont
-  ajoutés ;
-- ne pas communiquer une information uniquement par la couleur.
+## Product constraints
+
+- preserve compatibility with generic WebDAV servers;
+- implement provider-specific behavior as presets;
+- never store or log a secret in plain text;
+- never start network requests or perform business logic in `View()`;
+- accompany any new WebDAV parsing behavior with XML tests;
+- keep arrow-key navigation when adding `hjkl` shortcuts;
+- do not communicate information through color alone.

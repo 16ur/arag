@@ -1,78 +1,76 @@
 # Architecture
 
-Le projet est composé de quatre responsabilités principales.
+The project is divided into four main responsibilities.
 
 ## UI
 
 Bubble Tea V2.
 
-Responsabilités :
+Responsibilities:
 
-- affichage
-- navigation
-- raccourcis clavier
-- états de chargement, de confirmation et d'erreur
+- rendering;
+- navigation;
+- keyboard shortcuts;
+- loading, confirmation, and error states.
 
-La UI ne connaît pas le XML WebDAV.
+The UI does not know about WebDAV XML.
 
-`View()` produit uniquement une représentation de l'état courant. Elle ne
-lance aucune requête réseau et ne contient aucune logique métier. Les effets de
-bord sont exécutés par des commandes Bubble Tea.
+`View()` only produces a representation of the current state. It does not
+start network requests or contain business logic. Bubble Tea commands execute
+side effects.
 
 ---
 
 ## WebDAV
 
-Responsabilités :
+Responsibilities:
 
-- authentification
-- requêtes PROPFIND
-- parsing XML
-- normalisation des URL et chemins
-- application des timeouts
+- authentication;
+- `PROPFIND` requests;
+- XML parsing;
+- URL and path normalization;
+- timeout enforcement.
 
-Le client retourne des objets Go.
+The client returns Go values.
 
-La navigation utilise `Depth: 1`. Le client ne charge jamais toute
-l'arborescence distante.
+Navigation uses `Depth: 1`. The client never loads the entire remote tree.
 
 ---
 
 ## Player
 
-Responsabilités :
+Responsibilities:
 
-- ouvrir une URL dans un lecteur externe ;
-- adapter l'appel au lecteur sélectionné.
+- open a URL in an external player;
+- adapt the invocation to the selected player.
 
-Le player ne connaît pas Bubble Tea.
+The player does not know about Bubble Tea.
 
-IINA est la première implémentation du MVP. Le contrat du package ne doit pas
-dépendre d'IINA afin de permettre l'ajout ultérieur de VLC ou d'un autre
-lecteur.
+IINA is the first MVP implementation. The package contract must not depend on
+IINA, allowing VLC or another player to be added later.
 
-La transmission de l'authentification au lecteur devra éviter d'exposer les
-identifiants dans les logs, les messages d'erreur ou un fichier. Ce point doit
-faire l'objet d'un test technique avant de finaliser l'intégration IINA.
+Passing authentication to the player must not expose credentials in logs,
+error messages, or files. This requires a technical validation before the IINA
+integration is finalized.
 
 ---
 
 ## Configuration
 
-Responsabilités :
+Responsibilities:
 
-- charger l'URL, le preset, l'utilisateur et le lecteur ;
-- appliquer les valeurs par défaut ;
-- valider la configuration sans effectuer de requête réseau.
+- load the URL, preset, username, and player;
+- apply default values;
+- validate configuration without performing a network request.
 
-La configuration non sensible pourra être conservée dans un fichier. Les
-secrets n'y sont jamais écrits en clair.
+Non-sensitive configuration may be stored in a file. Secrets are never written
+to it in plain text.
 
-## Flux principal
+## Main flow
 
-1. La configuration prépare un client WebDAV.
-2. Une commande Bubble Tea demande le contenu du dossier courant.
-3. Le client exécute `PROPFIND` et retourne des objets Go.
-4. `Update()` intègre le résultat dans l'état de l'UI.
-5. `View()` affiche cet état.
-6. Lorsqu'un fichier est confirmé, le player l'ouvre avec le lecteur choisi.
+1. Configuration prepares a WebDAV client.
+2. A Bubble Tea command requests the contents of the current directory.
+3. The client runs `PROPFIND` and returns Go values.
+4. `Update()` incorporates the result into the UI state.
+5. `View()` renders that state.
+6. After a file is confirmed, the player opens it with the selected player.

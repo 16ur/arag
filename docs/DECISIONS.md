@@ -1,101 +1,90 @@
-# ADR 001
+# ADR 001: Lazy navigation
 
-Navigation lazy.
+## Context
 
-Pourquoi ?
+A seedbox may contain several thousand files.
 
-Une seedbox peut contenir plusieurs milliers de fichiers.
+## Decision
 
-Conséquence
-
-Le TUI ne charge jamais toute l'arborescence.
-
----
-
-# ADR 002
-
-WebDAV plutôt que SSH.
-
-Pourquoi ?
-
-Un seul protocole.
-
-Pas de parsing HTML.
+The TUI never loads the entire directory tree. It only requests the current
+directory and its direct children.
 
 ---
 
-# ADR 003
+# ADR 002: WebDAV instead of SSH
 
-Client WebDAV généraliste avec presets.
+## Context
 
-Pourquoi ?
+The application needs one reliable protocol for browsing remote files.
 
-Le cœur du produit doit fonctionner avec tout serveur WebDAV standard. Un
-preset, comme Seedhost, simplifie la configuration d'un fournisseur sans
-introduire de comportement spécifique dans le client WebDAV.
+## Decision
 
-Conséquence
-
-L'URL WebDAV reste configurable. Un preset ne fournit que des valeurs par
-défaut et peut être remplacé par la configuration utilisateur.
+Use WebDAV exclusively. Never parse HTML directory listings.
 
 ---
 
-# ADR 004
+# ADR 003: Generic WebDAV client with presets
 
-Lecteur externe interchangeable.
+## Context
 
-Pourquoi ?
+The core product must work with any standard WebDAV server. A preset such as
+Seedhost can simplify provider configuration without adding provider-specific
+behavior to the WebDAV client.
 
-IINA répond au besoin initial sur macOS, mais ne doit pas limiter arag à une
-seule application ou plateforme.
+## Decision
 
-Conséquence
-
-Le MVP implémente IINA derrière un contrat de player minimal. VLC et d'autres
-lecteurs pourront être ajoutés après le MVP.
-
----
-
-# ADR 005
-
-Les secrets ne sont pas stockés en clair.
-
-Pourquoi ?
-
-Demander le mot de passe avant chaque lecture dégrade fortement l'expérience,
-mais l'enregistrer dans le fichier de configuration n'est pas acceptable.
-
-Conséquence
-
-Pour le MVP, le mot de passe est demandé sans affichage une seule fois au
-démarrage puis conservé uniquement en mémoire pendant la session. Une variable
-d'environnement peut être utilisée pour les environnements automatisés. Une
-version ultérieure pourra utiliser le trousseau sécurisé du système pour une
-persistance consentie par l'utilisateur.
-
-Le mot de passe ne doit apparaître ni dans les logs, ni dans les erreurs, ni
-dans l'historique du shell.
+Keep the WebDAV URL configurable. A preset only supplies default values that
+user configuration can override.
 
 ---
 
-# ADR 006
+# ADR 004: Interchangeable external player
 
-Timeouts réseau courts et configurables.
+## Context
 
-Pourquoi ?
+IINA addresses the initial macOS use case but must not limit arag to one
+application or platform.
 
-Un TUI doit signaler rapidement un serveur indisponible sans abandonner trop
-tôt une seedbox lente.
+## Decision
 
-Conséquence
+Implement IINA for the MVP behind a minimal player contract. VLC and other
+players may be added after the MVP.
 
-Valeurs initiales proposées :
+---
 
-- 10 secondes pour établir la connexion et recevoir les en-têtes ;
-- 30 secondes maximum pour une requête de navigation `PROPFIND` ;
-- annulation immédiate lorsque l'utilisateur quitte ou remplace la navigation
-  en cours.
+# ADR 005: No plain-text secret storage
 
-Ces valeurs sont configurables. La lecture du média n'utilise pas le timeout
-de navigation, car sa durée est gérée par le lecteur externe.
+## Context
+
+Requesting the password before every playback would significantly harm the
+experience, but storing it in the configuration file is unacceptable.
+
+## Decision
+
+For the MVP, request the password once without echo at startup and keep it in
+memory for the session only. Automated environments may use an environment
+variable. A later version may use the operating system's secure credential
+store when the user explicitly enables persistence.
+
+The password must never appear in logs, error messages, or shell history.
+
+---
+
+# ADR 006: Short, configurable network timeouts
+
+## Context
+
+A TUI must report an unavailable server promptly without giving up too early
+on a slow seedbox.
+
+## Decision
+
+Use these initial values:
+
+- 10 seconds to establish a connection and receive response headers;
+- 30 seconds at most for a navigation `PROPFIND` request;
+- immediate cancellation when the user exits or starts a navigation action
+  that supersedes the current request.
+
+These values are configurable. Media playback does not use the navigation
+timeout because its duration is managed by the external player.

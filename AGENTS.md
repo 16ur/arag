@@ -1,47 +1,50 @@
-# Projet
+# Project
 
-arag est un navigateur WebDAV.
+arag is a WebDAV browser.
 
-Stack
+## Stack
 
 - Go
 - Bubble Tea V2
 
-Objectif
+## Goal
 
-Créer un navigateur de fichiers distant.
+Build a remote file browser.
 
-Portée produit
+## Product scope
 
-- Compatible avec les serveurs WebDAV standards.
-- Seedhost est le premier preset, pas une dépendance du client.
-- IINA est le lecteur du MVP, mais le player doit rester interchangeable.
-- La recherche et l'historique persistant sont hors du MVP.
+- Compatible with standard WebDAV servers.
+- Seedhost is the first preset, not a client dependency.
+- IINA is the MVP player, but the player must remain interchangeable.
+- Search and persistent history are outside the MVP scope.
 
-Architecture
+## Architecture
 
 UI -> WebDAV
 
-UI -> Player -> IINA pour le MVP
+UI -> Player -> IINA for the MVP
 
-Contraintes
+## Constraints
 
-Ne jamais parser du HTML.
+Never parse HTML.
 
-Toujours utiliser WebDAV.
+Always use WebDAV.
 
-Ne jamais lancer une requête réseau dans View().
+Never start a network request in `View()`.
 
-Ne jamais effectuer de logique métier dans View().
+Never perform business logic in `View()`.
 
-Préférer de petites fonctions.
+Prefer small functions.
 
-Toujours documenter les packages publics.
+Always document public packages.
 
-Éviter les dépendances si la bibliothèque standard suffit.
+Avoid dependencies when the standard library is sufficient.
 
-Ne jamais stocker ou journaliser un secret en clair.
+Never store or log a secret in plain text.
 
-Une information importante ne doit jamais dépendre uniquement de la couleur.
+Important information must never depend on color alone.
 
-Conserver les flèches directionnelles en plus des raccourcis hjkl.
+Keep arrow-key navigation in addition to `hjkl` shortcuts.
+
+Write code, identifiers, comments, user-facing text, documentation, and commit
+messages in English.

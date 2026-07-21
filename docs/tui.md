@@ -1,52 +1,51 @@
-# Interface TUI
+# TUI
 
-Au démarrage, arag charge et affiche le contenu du serveur WebDAV configuré.
-Avec le preset Seedhost, ce contenu correspond à la racine WebDAV de la
-seedbox.
+At startup, arag loads and displays the contents of the configured WebDAV
+server. With the Seedhost preset, this is the seedbox WebDAV root.
 
 ## Navigation
 
-- flèches haut/bas ou `j`/`k` : déplacer la sélection ;
-- `Entrée` ou `l` : entrer dans un dossier ou sélectionner un fichier ;
-- flèche gauche, `h` ou `Retour arrière` : revenir au dossier parent ;
-- `?` : afficher ou masquer l'aide ;
-- `q` : quitter.
+- up/down arrows or `j`/`k`: move the selection;
+- `Enter` or `l`: enter a directory or select a file;
+- left arrow, `h`, or `Backspace`: return to the parent directory;
+- `?`: show or hide help;
+- `q`: quit.
 
-Les raccourcis réellement implémentés doivent rester visibles dans l'aide. Les
-flèches sont toujours prises en charge afin que l'interface reste accessible
-aux personnes ne connaissant pas Vim.
+The help view must list the shortcuts that are actually implemented. Arrow
+keys remain available so that the interface is accessible to users who do not
+know Vim.
 
-## Ouverture d'un média
+## Opening media
 
-Pour un fichier vidéo pris en charge, `Entrée` affiche une confirmation avant
-de l'ouvrir dans IINA. La confirmation indique clairement le nom du fichier et
-permet d'annuler sans effet de bord.
+For a supported video file, `Enter` displays a confirmation before opening it
+in IINA. The confirmation clearly identifies the file and allows cancellation
+without side effects.
 
-## États à afficher
+## Display states
 
-- chargement en cours ;
-- dossier vide ;
-- contenu disponible ;
-- demande de confirmation ;
-- erreur récupérable.
+- loading;
+- empty directory;
+- available contents;
+- confirmation prompt;
+- recoverable error.
 
-Les erreurs distinguent au minimum :
+Errors distinguish at least:
 
-- configuration ou URL invalide ;
-- identifiants refusés ;
-- serveur indisponible ou timeout ;
-- réponse WebDAV invalide ;
-- lecteur absent ou impossible à lancer.
+- invalid configuration or URL;
+- rejected credentials;
+- unavailable server or timeout;
+- invalid WebDAV response;
+- missing player or player launch failure.
 
-Chaque erreur indique une action possible : réessayer, vérifier la
-configuration, ressaisir le mot de passe ou revenir au dossier précédent.
+Each error suggests an available action: retry, check configuration, enter the
+password again, or return to the previous directory.
 
-## Accessibilité et affichage
+## Accessibility and layout
 
-- aucune information ne dépend uniquement de la couleur ;
-- la sélection possède également un marqueur textuel ;
-- les noms longs sont tronqués proprement sans casser la mise en page ;
-- les petits terminaux conservent la navigation et les messages essentiels ;
-- le redimensionnement du terminal ne provoque ni requête réseau ni perte de
-  sélection ;
-- les messages restent compréhensibles sans jargon WebDAV inutile.
+- no information depends on color alone;
+- the selection also has a textual marker;
+- long names are truncated cleanly without breaking the layout;
+- small terminals retain essential navigation and messages;
+- resizing the terminal does not trigger a network request or lose the
+  selection;
+- messages remain understandable without unnecessary WebDAV jargon.

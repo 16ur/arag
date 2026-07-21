@@ -1,37 +1,33 @@
 # arag
 
-arag est un navigateur WebDAV généraliste permettant de parcourir des fichiers
-distants depuis un terminal et de lancer rapidement des vidéos dans un lecteur
-externe.
+arag is a general-purpose WebDAV browser for exploring remote files from a
+terminal and quickly opening videos in an external player.
 
-Seedhost est le premier preset fourni, car il constitue le cas d'usage initial.
-Un preset renseigne des valeurs adaptées à un fournisseur sans enfermer le
-client dans ce fournisseur. Une configuration WebDAV personnalisée reste
-toujours possible.
+Seedhost is the first provided preset because it is the initial use case. A
+preset supplies provider-appropriate defaults without locking the client to
+that provider. Custom WebDAV configuration remains available at all times.
 
-## Objectifs
+## Goals
 
-- Naviguer dans les fichiers de tout serveur WebDAV compatible.
-- Proposer un preset Seedhost, puis d'autres presets selon les besoins.
-- Interface TUI avec Bubble Tea V2.
-- Ouverture des vidéos dans un lecteur externe.
-- Utiliser IINA pour le MVP, sans le rendre obligatoire dans l'architecture.
-- Navigation fluide au clavier avec "hjkl" et les flèches directionnelles.
+- Browse files on any compatible WebDAV server.
+- Provide a Seedhost preset, followed by other presets as needed.
+- Build a TUI with Bubble Tea V2.
+- Open videos in an external player.
+- Use IINA for the MVP without making it an architectural requirement.
+- Provide fluid keyboard navigation with `hjkl` and the arrow keys.
 
-## Principes produit
+## Product principles
 
-- Le produit doit rester utilisable sans connaître Vim : les flèches et une
-  aide intégrée sont toujours disponibles.
-- Une information importante ne doit jamais être communiquée uniquement par
-  une couleur.
-- Les erreurs doivent expliquer leur cause et, lorsque possible, comment les
-  corriger.
-- Le chargement d'un dossier doit rester progressif et annulable.
-- Le mot de passe ne doit jamais être enregistré en clair.
+- The product must remain usable without Vim knowledge: arrow keys and
+  built-in help are always available.
+- Important information must never be communicated through color alone.
+- Errors must explain their cause and, when possible, how to resolve them.
+- Directory loading must remain incremental and cancelable.
+- Passwords must never be stored in plain text.
 
-## Hors du MVP
+## Outside the MVP scope
 
-- recherche ;
-- historique de navigation persistant ;
-- prise en charge officielle de plusieurs lecteurs et plateformes ;
-- stockage persistant des secrets dans les trousseaux système.
+- search;
+- persistent navigation history;
+- official support for multiple players and platforms;
+- persistent secret storage in operating system credential stores.
