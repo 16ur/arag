@@ -87,6 +87,8 @@ func (m *Model) renderBody(theme viewTheme, width, height int) string {
 		return renderCenteredState(theme, width, height, "Connecting to WebDAV…", "Authenticating and loading the root directory")
 	case m.connection != nil:
 		return m.renderConnectionForm(theme, width, height)
+	case m.showHelp:
+		return m.renderHelpModal(theme, width, height)
 	case m.pendingOpen != nil:
 		return m.renderOpenModal(theme, width, height)
 	case m.showDetails:
@@ -198,6 +200,30 @@ func (m *Model) renderQuitModal(theme viewTheme, width, height int) string {
 	})
 }
 
+func (m *Model) renderHelpModal(theme viewTheme, width, height int) string {
+	lines := []string{
+		theme.section.Render("Navigation"),
+		helpLine(theme, "↑/↓ · j/k", "Move selection"),
+		helpLine(theme, "Enter · l", "Open selected entry"),
+		helpLine(theme, "← · h · Backspace", "Return to parent"),
+		"",
+		theme.section.Render("Information"),
+		helpLine(theme, "i", "Show entry details"),
+		helpLine(theme, "?", "Close this help"),
+		"",
+		theme.section.Render("Application"),
+		helpLine(theme, "Enter / Esc", "Confirm or cancel a dialog"),
+		helpLine(theme, "r", "Retry after an error"),
+		helpLine(theme, "q", "Open quit confirmation"),
+		helpLine(theme, "Ctrl+C", "Quit immediately"),
+	}
+	return renderModal(theme, width, height, "Help", lines)
+}
+
+func helpLine(theme viewTheme, shortcut, description string) string {
+	return theme.shortcutKey.Width(18).Render(shortcut) + theme.value.Render(description)
+}
+
 func (m *Model) renderDetailsModal(theme viewTheme, width, height int) string {
 	entry := m.selectedEntry()
 	if entry == nil {
@@ -243,6 +269,9 @@ func renderModal(theme viewTheme, width, height int, title string, lines []strin
 	}
 	modalWidth := min(maximumModalWidth, width-6)
 	modal := theme.modal.Width(modalWidth).Render(content)
+	if lipgloss.Height(modal) > height || lipgloss.Width(modal) > width {
+		return fitBlock(content, width, height)
+	}
 	return lipgloss.Place(width, height, lipgloss.Center, lipgloss.Center, modal)
 }
 
@@ -276,24 +305,26 @@ func (m *Model) renderFooter(theme viewTheme, width int) string {
 		shortcuts = []string{"←/→", "change", "enter/tab", "next", "esc", "quit"}
 	case m.connection != nil:
 		shortcuts = []string{"tab", "next", "shift+tab", "previous", "enter", "next", "esc", "quit"}
+	case m.showHelp:
+		shortcuts = []string{"?/esc", "close", "q", "quit"}
 	case m.pendingOpen != nil:
 		shortcuts = []string{"enter", "open", "esc", "cancel", "q", "quit"}
 	case m.showDetails:
 		shortcuts = []string{"i/esc", "close", "q", "quit"}
 	case m.err != nil:
-		shortcuts = []string{"r", "retry", "h/←", "back", "q", "quit"}
+		shortcuts = []string{"r", "retry", "h/←", "back", "?", "help", "q", "quit"}
 	case m.loading || m.opening:
-		shortcuts = []string{"q", "quit"}
+		shortcuts = []string{"?", "help", "q", "quit"}
 	case len(m.entries) == 0:
-		shortcuts = []string{"h/←", "back", "q", "quit"}
+		shortcuts = []string{"h/←", "back", "?", "help", "q", "quit"}
 	default:
 		switch {
 		case width < 32:
-			shortcuts = []string{"↑↓", "move", "q", "quit"}
+			shortcuts = []string{"↑↓", "move", "?", "help"}
 		case width < 64:
-			shortcuts = []string{"↑↓/jk", "move", "enter", "open", "q", "quit"}
+			shortcuts = []string{"↑↓/jk", "move", "enter", "open", "?", "help"}
 		default:
-			shortcuts = []string{"↑↓/jk", "navigate", "enter/l", "open", "i", "details", "h/←", "back", "q", "quit"}
+			shortcuts = []string{"↑↓/jk", "navigate", "enter/l", "open", "i", "details", "h/←", "back", "?", "help", "q", "quit"}
 		}
 	}
 	if width < 32 {
@@ -308,6 +339,8 @@ func (m *Model) renderFooter(theme viewTheme, width int) string {
 			shortcuts = []string{"←/→", "change", "tab", "next"}
 		case m.connection != nil:
 			shortcuts = []string{"tab", "next", "esc", "quit"}
+		case m.showHelp:
+			shortcuts = []string{"?/esc", "close", "q", "quit"}
 		case m.pendingOpen != nil:
 			shortcuts = []string{"enter", "open", "esc", "back"}
 		case m.showDetails:
@@ -358,7 +391,7 @@ func (m *Model) selectedEntry() *webdav.Entry {
 }
 
 func (m *Model) canShowBrowser() bool {
-	return m.connection == nil && !m.loading && m.err == nil && !m.opening && m.pendingOpen == nil && !m.showDetails && !m.confirmQuit && len(m.entries) > 0
+	return m.connection == nil && !m.loading && m.err == nil && !m.opening && !m.showHelp && m.pendingOpen == nil && !m.showDetails && !m.confirmQuit && len(m.entries) > 0
 }
 
 func essentialEntryType(entry webdav.Entry) string {

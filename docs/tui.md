@@ -49,6 +49,7 @@ available to bypass the form.
 - `Enter` or `l`: enter a directory or select a file;
 - left arrow, `h`, or `Backspace`: return to the parent directory;
 - `i`: show or hide details for the selected entry;
+- `?`: show or hide the built-in help;
 - `Esc`: close the details dialog;
 - `q`: open the quit confirmation;
 - `Ctrl+C`: interrupt and quit immediately.
@@ -56,9 +57,10 @@ available to bypass the form.
 The quit confirmation requires `Enter` to close arag. `Esc` cancels it and
 restores the previous view without changing the current navigation state.
 
-The help view must list the shortcuts that are actually implemented. Arrow
-keys remain available so that the interface is accessible to users who do not
-know Vim.
+The help dialog groups the implemented navigation, information, dialog, retry,
+and exit shortcuts. It closes with `?` or `Esc` and prevents background
+navigation while open. Arrow keys remain available so that the interface is
+accessible to users who do not know Vim.
 
 ## Opening media
 
@@ -120,6 +122,7 @@ uses the complete width. Complete metadata remains available with `i`.
 - available contents;
 - confirmation prompt;
 - entry details;
+- built-in help;
 - recoverable error.
 
 The header always displays a breadcrumb and a textual connection state.

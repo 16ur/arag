@@ -40,6 +40,7 @@ type Model struct {
 	selected            int
 	targetSelection     int
 	loading             bool
+	showHelp            bool
 	showDetails         bool
 	confirmQuit         bool
 	pendingOpen         *webdav.Entry
@@ -215,6 +216,7 @@ func (m *Model) startLoad(directory *url.URL, selected int) tea.Cmd {
 	m.requestID++
 	m.targetSelection = selected
 	m.loading = true
+	m.showHelp = false
 	m.showDetails = false
 	m.pendingOpen = nil
 	m.opening = false
@@ -260,6 +262,16 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 	if keystroke == "q" {
 		m.confirmQuit = true
+		return m, nil
+	}
+	if m.showHelp {
+		if keystroke == "?" || keystroke == "esc" {
+			m.showHelp = false
+		}
+		return m, nil
+	}
+	if keystroke == "?" {
+		m.showHelp = true
 		return m, nil
 	}
 	if m.pendingOpen != nil {

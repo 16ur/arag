@@ -391,6 +391,9 @@ func TestModelKeepsRenderedDimensionsStable(t *testing.T) {
 		{name: "dialog", width: 96, height: 20, setup: func(model *Model) {
 			model.confirmQuit = true
 		}},
+		{name: "compact help", width: 30, height: 12, setup: func(model *Model) {
+			model.showHelp = true
+		}},
 	}
 	for _, test := range tests {
 		test := test
@@ -546,6 +549,65 @@ func TestModelShowsRelevantDirectoryDetails(t *testing.T) {
 		!strings.Contains(view, "Size      Not applicable") ||
 		!strings.Contains(view, "Modified  Not available") {
 		t.Fatalf("View() = %q", view)
+	}
+}
+
+func TestModelShowsAndClosesHelp(t *testing.T) {
+	t.Parallel()
+
+	model := loadedModel("one", "two")
+	_, command := model.Update(key("?"))
+	if command != nil || !model.showHelp {
+		t.Fatal("question mark did not open help")
+	}
+	view := viewText(model)
+	wanted := []string{
+		"Help",
+		"Navigation",
+		"↑/↓ · j/k",
+		"Move selection",
+		"Enter · l",
+		"Open selected entry",
+		"i",
+		"Show entry details",
+		"q",
+		"Open quit confirmation",
+		"Ctrl+C",
+		"Quit immediately",
+	}
+	for _, value := range wanted {
+		if !strings.Contains(view, value) {
+			t.Errorf("help does not contain %q:\n%s", value, view)
+		}
+	}
+
+	model.Update(key("down"))
+	if model.selected != 0 {
+		t.Fatal("selection moved while help was open")
+	}
+	model.Update(key("?"))
+	if model.showHelp || strings.Contains(viewText(model), "Navigation") {
+		t.Fatal("question mark did not close help")
+	}
+	model.Update(key("?"))
+	model.Update(key("esc"))
+	if model.showHelp {
+		t.Fatal("Escape did not close help")
+	}
+}
+
+func TestModelRestoresHelpAfterCancelingQuit(t *testing.T) {
+	t.Parallel()
+
+	model := loadedModel("file")
+	model.Update(key("?"))
+	model.Update(key("q"))
+	if !model.confirmQuit || !model.showHelp {
+		t.Fatal("q did not open quit confirmation over help")
+	}
+	model.Update(key("esc"))
+	if model.confirmQuit || !model.showHelp || !strings.Contains(viewText(model), "Navigation") {
+		t.Fatal("canceling quit did not restore help")
 	}
 }
 

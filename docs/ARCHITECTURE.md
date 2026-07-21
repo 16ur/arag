@@ -12,7 +12,7 @@ Responsibilities:
 - adaptive terminal styling;
 - WebDAV connection form and preset state;
 - navigation;
-- keyboard shortcuts;
+- keyboard shortcuts and responsive built-in help;
 - loading, confirmation, and error states.
 
 The UI does not know about WebDAV XML.

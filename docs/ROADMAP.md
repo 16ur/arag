@@ -11,7 +11,7 @@
 - [x] arrow-key and `hjkl` navigation
 - [x] return to the parent directory
 - [x] loading, empty, and error states
-- [ ] built-in help and discoverable shortcuts
+- [x] built-in help and discoverable shortcuts
 - [x] layout suitable for small terminals and long names
 - [x] details panel for the selected file or directory
 - [x] confirmation before opening a video

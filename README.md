@@ -49,8 +49,9 @@ go run ./cmd/arag \
 In direct mode, the password is requested without being displayed. Once the
 browser opens, use the arrow keys or `j`/`k` to move the selection, `Enter` or
 `l` to open a directory, `i` to inspect the complete selected entry, the left
-arrow or `h` to return to the parent directory, and `q` to open the quit
-confirmation. `Ctrl+C` remains available for an immediate exit. Pressing
+arrow or `h` to return to the parent directory, `?` to display the built-in
+help, and `q` to open the quit confirmation. `Ctrl+C` remains available for an
+immediate exit. Pressing
 `Enter` or `l` on an MKV or MP4 file opens a confirmation prompt. Confirming
 starts a temporary local stream and opens it in IINA. IINA receives neither
 the WebDAV password nor the remote media URL. Closing arag also stops the local
