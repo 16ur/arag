@@ -126,9 +126,11 @@ experienced users.
 ## Decision
 
 Starting arag without a WebDAV URL displays a connection form inside the TUI.
-The form collects a server URL, username, and masked password. Submitting it
-creates and validates the session in a Bubble Tea command before transitioning
-to the file browser.
+Seedhost is the default preset and derives a read-only server URL from the
+username. A Custom WebDAV option exposes an editable URL, preserving the
+generic client. Both options collect a username and masked password. Submitting
+the form creates and validates the session in a Bubble Tea command before
+transitioning to the file browser.
 
 Command-line connection options remain supported and bypass the form. The
 password field is cleared after a successful connection, and credentials are

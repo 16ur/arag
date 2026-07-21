@@ -13,7 +13,7 @@ import (
 
 const (
 	defaultScreenWidth  = 96
-	defaultScreenHeight = 20
+	defaultScreenHeight = 24
 	screenChromeHeight  = 4
 	splitLayoutMinWidth = 80
 	listPaneRatio       = 0.65
@@ -272,6 +272,8 @@ func (m *Model) renderFooter(theme viewTheme, width int) string {
 		shortcuts = []string{"esc", "cancel"}
 	case m.connection != nil && m.connection.focus == connectionSubmitButton:
 		shortcuts = []string{"enter", "connect", "shift+tab", "previous", "esc", "quit"}
+	case m.connection != nil && m.connection.focus == connectionPresetControl:
+		shortcuts = []string{"←/→", "change", "enter/tab", "next", "esc", "quit"}
 	case m.connection != nil:
 		shortcuts = []string{"tab", "next", "shift+tab", "previous", "enter", "next", "esc", "quit"}
 	case m.pendingOpen != nil:
@@ -302,6 +304,8 @@ func (m *Model) renderFooter(theme viewTheme, width int) string {
 			shortcuts = []string{"esc", "cancel"}
 		case m.connection != nil && m.connection.focus == connectionSubmitButton:
 			shortcuts = []string{"enter", "connect", "esc", "quit"}
+		case m.connection != nil && m.connection.focus == connectionPresetControl:
+			shortcuts = []string{"←/→", "change", "tab", "next"}
 		case m.connection != nil:
 			shortcuts = []string{"tab", "next", "esc", "quit"}
 		case m.pendingOpen != nil:

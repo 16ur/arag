@@ -8,8 +8,11 @@ Seedhost preset:
 
 `https://mud.seedhost.eu/<user>/webdav`
 
-The preset supplies a URL template but does not change the protocol or parsing
-behavior.
+The interactive connection screen selects this preset by default. It derives
+the URL from the entered username and displays the result as read-only. The
+username is encoded as a single URL path segment. Users can switch to Custom
+WebDAV to enter any standard server URL; the preset does not change the
+protocol or parsing behavior.
 
 ## Authentication
 

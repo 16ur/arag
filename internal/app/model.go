@@ -151,9 +151,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.connecting = false
 		m.connection.err = msg.err
-		focus := connectionURLField
+		focus := connectionURLControl
+		if m.connection.preset == seedhostPreset {
+			focus = connectionUsernameControl
+		}
 		if errors.Is(msg.err, webdav.ErrAuthentication) {
-			focus = connectionPasswordField
+			focus = connectionPasswordControl
 		}
 		return m, m.connection.focusControl(focus)
 	case entriesLoadedMsg:

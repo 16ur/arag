@@ -5,17 +5,34 @@ screen. A successful connection loads and displays the server root.
 
 ## Connection
 
-The connection screen contains three fields:
+The connection screen starts with a server choice:
+
+- Seedhost, selected by default; or
+- Custom WebDAV.
+
+The Seedhost preset contains:
+
+- username;
+- a read-only generated URL using
+  `https://mud.seedhost.eu/<username>/webdav`;
+- masked password.
+
+The custom WebDAV option contains:
 
 - WebDAV server URL;
 - username;
 - masked password.
 
 `Tab`, `Shift+Tab`, or the up/down arrows move between controls. `Enter` moves
-to the next field and submits only when the `Connect` button is selected.
-`Esc` opens the quit confirmation, while `Ctrl+C` exits immediately. The
-letter `q` remains available while editing because it may be part of a URL,
-username, or password.
+to the next field and submits only when the `Connect` button is selected. The
+left/right arrows or space change the focused server option. Switching presets
+does not erase the custom URL. `Esc` opens the quit confirmation, while
+`Ctrl+C` exits immediately. The letter `q` remains available while editing
+because it may be part of a URL, username, or password.
+
+The Seedhost URL is recomputed as the username changes. The username is encoded
+as one URL path segment, and URL generation happens while updating form state,
+not while rendering the view.
 
 Submitting starts authentication and the initial root `PROPFIND` in a Bubble
 Tea command. `Esc` cancels an in-progress attempt. Authentication and network

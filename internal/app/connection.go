@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	"net/url"
 	"strings"
 
 	"charm.land/bubbles/v2/textinput"
@@ -17,8 +18,26 @@ const (
 	connectionURLField = iota
 	connectionUsernameField
 	connectionPasswordField
+)
+
+const (
+	connectionPresetControl = iota
+	connectionURLControl
+	connectionUsernameControl
+	connectionPasswordControl
 	connectionSubmitButton
-	connectionControlCount
+)
+
+const (
+	seedhostURLTemplate = "https://mud.seedhost.eu/<username>/webdav"
+	seedhostHost        = "mud.seedhost.eu"
+)
+
+type connectionPreset uint8
+
+const (
+	seedhostPreset connectionPreset = iota
+	customWebDAVPreset
 )
 
 // ConnectionConfig contains credentials entered for one WebDAV session.
@@ -45,9 +64,11 @@ type Session struct {
 type SessionFactory func(context.Context, ConnectionConfig) (Session, error)
 
 type connectionForm struct {
-	inputs [3]textinput.Model
-	focus  int
-	err    error
+	inputs      [3]textinput.Model
+	preset      connectionPreset
+	seedhostURL string
+	focus       int
+	err         error
 }
 
 type sessionConnectedMsg struct {
@@ -61,7 +82,7 @@ type connectionFailedMsg struct {
 }
 
 func newConnectionForm(defaults ConnectionDefaults, darkBackground bool) *connectionForm {
-	form := &connectionForm{}
+	form := &connectionForm{preset: seedhostPreset, focus: connectionUsernameControl}
 	form.inputs[connectionURLField] = newConnectionInput("https://example.com/webdav")
 	form.inputs[connectionUsernameField] = newConnectionInput("username")
 	form.inputs[connectionPasswordField] = newConnectionInput("password")
@@ -69,6 +90,11 @@ func newConnectionForm(defaults ConnectionDefaults, darkBackground bool) *connec
 	form.inputs[connectionPasswordField].EchoCharacter = '•'
 	form.inputs[connectionURLField].SetValue(strings.TrimSpace(defaults.BaseURL))
 	form.inputs[connectionUsernameField].SetValue(strings.TrimSpace(defaults.Username))
+	if strings.TrimSpace(defaults.BaseURL) != "" {
+		form.preset = customWebDAVPreset
+		form.focus = connectionURLControl
+	}
+	form.syncSeedhostURL()
 	form.resize(defaultScreenWidth)
 	form.applyTheme(newViewTheme(darkBackground))
 	return form
@@ -87,10 +113,13 @@ func (form *connectionForm) init() tea.Cmd {
 }
 
 func (form *connectionForm) focusControl(control int) tea.Cmd {
-	form.focus = clampSelection(control, connectionControlCount)
+	if !form.hasControl(control) {
+		control = form.controls()[0]
+	}
+	form.focus = control
 	var command tea.Cmd
 	for index := range form.inputs {
-		if index == form.focus {
+		if input, ok := form.inputForControl(form.focus); ok && index == input {
 			command = form.inputs[index].Focus()
 		} else {
 			form.inputs[index].Blur()
@@ -100,32 +129,116 @@ func (form *connectionForm) focusControl(control int) tea.Cmd {
 }
 
 func (form *connectionForm) focusNext() tea.Cmd {
-	return form.focusControl((form.focus + 1) % connectionControlCount)
+	controls := form.controls()
+	index := form.controlIndex(form.focus)
+	return form.focusControl(controls[(index+1)%len(controls)])
 }
 
 func (form *connectionForm) focusPrevious() tea.Cmd {
-	return form.focusControl((form.focus - 1 + connectionControlCount) % connectionControlCount)
+	controls := form.controls()
+	index := form.controlIndex(form.focus)
+	return form.focusControl(controls[(index-1+len(controls))%len(controls)])
 }
 
 func (form *connectionForm) update(msg tea.Msg) tea.Cmd {
-	if form.focus >= len(form.inputs) {
+	input, ok := form.inputForControl(form.focus)
+	if !ok {
 		return nil
 	}
 	var command tea.Cmd
-	form.inputs[form.focus], command = form.inputs[form.focus].Update(msg)
+	form.inputs[input], command = form.inputs[input].Update(msg)
+	if input == connectionUsernameField {
+		form.syncSeedhostURL()
+	}
 	return command
 }
 
 func (form *connectionForm) config() (ConnectionConfig, error) {
-	baseURL := strings.TrimSpace(form.inputs[connectionURLField].Value())
-	if baseURL == "" {
-		return ConnectionConfig{}, errors.New("WebDAV URL is required")
+	username := strings.TrimSpace(form.inputs[connectionUsernameField].Value())
+	baseURL := form.seedhostURL
+	if form.preset == seedhostPreset {
+		if username == "" {
+			return ConnectionConfig{}, errors.New("Seedhost username is required")
+		}
+	} else {
+		baseURL = strings.TrimSpace(form.inputs[connectionURLField].Value())
+		if baseURL == "" {
+			return ConnectionConfig{}, errors.New("WebDAV URL is required")
+		}
 	}
 	return ConnectionConfig{
 		BaseURL:  baseURL,
-		Username: strings.TrimSpace(form.inputs[connectionUsernameField].Value()),
+		Username: username,
 		Password: form.inputs[connectionPasswordField].Value(),
 	}, nil
+}
+
+func (form *connectionForm) controls() []int {
+	if form.preset == seedhostPreset {
+		return []int{
+			connectionPresetControl,
+			connectionUsernameControl,
+			connectionPasswordControl,
+			connectionSubmitButton,
+		}
+	}
+	return []int{
+		connectionPresetControl,
+		connectionURLControl,
+		connectionUsernameControl,
+		connectionPasswordControl,
+		connectionSubmitButton,
+	}
+}
+
+func (form *connectionForm) hasControl(control int) bool {
+	for _, candidate := range form.controls() {
+		if candidate == control {
+			return true
+		}
+	}
+	return false
+}
+
+func (form *connectionForm) controlIndex(control int) int {
+	for index, candidate := range form.controls() {
+		if candidate == control {
+			return index
+		}
+	}
+	return 0
+}
+
+func (form *connectionForm) inputForControl(control int) (int, bool) {
+	switch control {
+	case connectionURLControl:
+		return connectionURLField, true
+	case connectionUsernameControl:
+		return connectionUsernameField, true
+	case connectionPasswordControl:
+		return connectionPasswordField, true
+	default:
+		return 0, false
+	}
+}
+
+func (form *connectionForm) togglePreset() tea.Cmd {
+	if form.preset == seedhostPreset {
+		form.preset = customWebDAVPreset
+	} else {
+		form.preset = seedhostPreset
+	}
+	form.err = nil
+	return form.focusControl(connectionPresetControl)
+}
+
+func (form *connectionForm) syncSeedhostURL() {
+	username := strings.TrimSpace(form.inputs[connectionUsernameField].Value())
+	if username == "" {
+		form.seedhostURL = seedhostURLTemplate
+		return
+	}
+	form.seedhostURL = "https://" + seedhostHost + "/" + url.PathEscape(username) + "/webdav"
 }
 
 func (form *connectionForm) clearPassword() {
@@ -231,6 +344,12 @@ func (m *Model) handleConnectionKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			return m, m.connection.focusControl(connectionSubmitButton)
 		}
 		return m, nil
+	}
+	if m.connection.focus == connectionPresetControl {
+		switch keystroke {
+		case "left", "right", "space":
+			return m, m.connection.togglePreset()
+		}
 	}
 
 	switch keystroke {

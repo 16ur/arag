@@ -25,6 +25,8 @@ func TestConnectionModelStartsWithoutNetworkIO(t *testing.T) {
 	view := ansi.Strip(model.View().Content)
 	if !strings.Contains(view, "Connect to WebDAV") ||
 		!strings.Contains(view, "Server URL") ||
+		!strings.Contains(view, "Seedhost") ||
+		!strings.Contains(view, "Custom WebDAV") ||
 		!strings.Contains(view, "Username") ||
 		!strings.Contains(view, "Password") ||
 		!strings.Contains(view, "Not connected") {
@@ -32,6 +34,11 @@ func TestConnectionModelStartsWithoutNetworkIO(t *testing.T) {
 	}
 	if model.connection.inputs[connectionUsernameField].Value() != "seiz" {
 		t.Fatal("connection defaults were not applied")
+	}
+	if model.connection.preset != seedhostPreset ||
+		model.connection.seedhostURL != "https://mud.seedhost.eu/seiz/webdav" ||
+		model.connection.focus != connectionUsernameControl {
+		t.Fatal("Seedhost defaults were not applied")
 	}
 	if factoryCalls != 0 {
 		t.Fatalf("View() performed %d connection attempts", factoryCalls)
@@ -43,7 +50,7 @@ func TestConnectionModelMasksPassword(t *testing.T) {
 
 	model := newTestConnectionModel(nil)
 	model.connection.inputs[connectionPasswordField].SetValue("sensitive-password")
-	model.connection.focusControl(connectionPasswordField)
+	model.connection.focusControl(connectionPasswordControl)
 	view := ansi.Strip(model.View().Content)
 	if strings.Contains(view, "sensitive-password") {
 		t.Fatal("View() exposed the WebDAV password")
@@ -58,7 +65,7 @@ func TestConnectionModelKeepsFocusedFieldVisibleOnSmallTerminal(t *testing.T) {
 
 	model := newTestConnectionModel(nil)
 	model.connection.inputs[connectionPasswordField].SetValue("secret")
-	model.connection.focusControl(connectionPasswordField)
+	model.connection.focusControl(connectionPasswordControl)
 	model.Update(tea.WindowSizeMsg{Width: 24, Height: 8})
 	view := model.View().Content
 	plainView := ansi.Strip(view)
@@ -84,8 +91,11 @@ func TestConnectionModelTreatsQAsInputInsideField(t *testing.T) {
 	if model.confirmQuit {
 		t.Fatal("q opened quit confirmation while editing a field")
 	}
-	if model.connection.inputs[connectionURLField].Value() != "q" {
-		t.Fatalf("URL value = %q", model.connection.inputs[connectionURLField].Value())
+	if model.connection.inputs[connectionUsernameField].Value() != "q" {
+		t.Fatalf("username value = %q", model.connection.inputs[connectionUsernameField].Value())
+	}
+	if model.connection.seedhostURL != "https://mud.seedhost.eu/q/webdav" {
+		t.Fatalf("Seedhost URL = %q", model.connection.seedhostURL)
 	}
 }
 
@@ -97,17 +107,19 @@ func TestConnectionModelNavigatesFormBeforeSubmitting(t *testing.T) {
 		factoryCalls++
 		return Session{}, nil
 	})
+	model.connection.preset = customWebDAVPreset
 	model.connection.inputs[connectionURLField].SetValue("https://example.com/webdav")
+	model.connection.focusControl(connectionURLControl)
 	model.Update(key("enter"))
-	if model.connection.focus != connectionUsernameField || factoryCalls != 0 {
+	if model.connection.focus != connectionUsernameControl || factoryCalls != 0 {
 		t.Fatal("Enter did not move from URL to username")
 	}
 	model.Update(key("tab"))
-	if model.connection.focus != connectionPasswordField {
+	if model.connection.focus != connectionPasswordControl {
 		t.Fatal("Tab did not move to password")
 	}
 	model.Update(key("shift+tab"))
-	if model.connection.focus != connectionUsernameField {
+	if model.connection.focus != connectionUsernameControl {
 		t.Fatal("Shift+Tab did not move to the previous field")
 	}
 }
@@ -130,9 +142,9 @@ func TestConnectionModelConnectsAndTransitionsToBrowser(t *testing.T) {
 		}, nil
 	})
 	form := model.connection
-	form.inputs[connectionURLField].SetValue("https://example.com/webdav")
 	form.inputs[connectionUsernameField].SetValue("seiz")
 	form.inputs[connectionPasswordField].SetValue("secret")
+	form.syncSeedhostURL()
 	form.focusControl(connectionSubmitButton)
 
 	_, command := model.Update(key("enter"))
@@ -143,7 +155,7 @@ func TestConnectionModelConnectsAndTransitionsToBrowser(t *testing.T) {
 		t.Fatal("connecting state is not visible")
 	}
 	model.Update(command())
-	if receivedConfig.BaseURL != "https://example.com/webdav" ||
+	if receivedConfig.BaseURL != "https://mud.seedhost.eu/seiz/webdav" ||
 		receivedConfig.Username != "seiz" ||
 		receivedConfig.Password != "secret" {
 		t.Fatal("session factory did not receive the form values")
@@ -165,8 +177,9 @@ func TestConnectionModelKeepsFormAfterAuthenticationFailure(t *testing.T) {
 	model := newTestConnectionModel(func(context.Context, ConnectionConfig) (Session, error) {
 		return Session{}, webdav.ErrAuthentication
 	})
-	model.connection.inputs[connectionURLField].SetValue("https://example.com/webdav")
+	model.connection.inputs[connectionUsernameField].SetValue("seiz")
 	model.connection.inputs[connectionPasswordField].SetValue("wrong-password")
+	model.connection.syncSeedhostURL()
 	model.connection.focusControl(connectionSubmitButton)
 	_, command := model.Update(key("enter"))
 	model.Update(command())
@@ -174,7 +187,7 @@ func TestConnectionModelKeepsFormAfterAuthenticationFailure(t *testing.T) {
 	if model.connection == nil || model.connecting {
 		t.Fatal("authentication failure closed the connection form")
 	}
-	if model.connection.focus != connectionPasswordField {
+	if model.connection.focus != connectionPasswordControl {
 		t.Fatalf("focused control = %d, want password field", model.connection.focus)
 	}
 	view := ansi.Strip(model.View().Content)
@@ -186,7 +199,7 @@ func TestConnectionModelKeepsFormAfterAuthenticationFailure(t *testing.T) {
 	}
 }
 
-func TestConnectionModelValidatesURLBeforeConnecting(t *testing.T) {
+func TestConnectionModelValidatesSeedhostUsernameBeforeConnecting(t *testing.T) {
 	t.Parallel()
 
 	factoryCalls := 0
@@ -197,10 +210,25 @@ func TestConnectionModelValidatesURLBeforeConnecting(t *testing.T) {
 	model.connection.focusControl(connectionSubmitButton)
 	_, command := model.Update(key("enter"))
 	if command != nil || model.connecting || factoryCalls != 0 {
-		t.Fatal("empty URL started a connection attempt")
+		t.Fatal("empty Seedhost username started a connection attempt")
+	}
+	if !strings.Contains(ansi.Strip(model.View().Content), "Seedhost username is required") {
+		t.Fatal("missing Seedhost username error is not visible")
+	}
+}
+
+func TestConnectionModelValidatesCustomURLBeforeConnecting(t *testing.T) {
+	t.Parallel()
+
+	model := newTestConnectionModel(nil)
+	model.connection.preset = customWebDAVPreset
+	model.connection.focusControl(connectionSubmitButton)
+	_, command := model.Update(key("enter"))
+	if command != nil || model.connecting {
+		t.Fatal("empty custom WebDAV URL started a connection attempt")
 	}
 	if !strings.Contains(ansi.Strip(model.View().Content), "WebDAV URL is required") {
-		t.Fatal("missing URL error is not visible")
+		t.Fatal("missing custom URL error is not visible")
 	}
 }
 
@@ -211,7 +239,8 @@ func TestConnectionModelCancelsAttemptWithEscape(t *testing.T) {
 		<-ctx.Done()
 		return Session{}, ctx.Err()
 	})
-	model.connection.inputs[connectionURLField].SetValue("https://example.com/webdav")
+	model.connection.inputs[connectionUsernameField].SetValue("seiz")
+	model.connection.syncSeedhostURL()
 	model.connection.focusControl(connectionSubmitButton)
 	_, command := model.Update(key("enter"))
 	if command == nil {
@@ -224,6 +253,63 @@ func TestConnectionModelCancelsAttemptWithEscape(t *testing.T) {
 	model.Update(command())
 	if model.connection.err != nil {
 		t.Fatalf("stale canceled attempt changed the form error: %v", model.connection.err)
+	}
+}
+
+func TestConnectionModelBuildsEncodedSeedhostURLFromUsername(t *testing.T) {
+	t.Parallel()
+
+	model := newTestConnectionModel(nil)
+	model.Update(key("alice / media"))
+	if model.connection.seedhostURL != "https://mud.seedhost.eu/alice%20%2F%20media/webdav" {
+		t.Fatalf("Seedhost URL = %q", model.connection.seedhostURL)
+	}
+	view := ansi.Strip(model.View().Content)
+	if !strings.Contains(view, "Server URL · generated") ||
+		!strings.Contains(view, model.connection.seedhostURL) {
+		t.Fatalf("View() does not show the generated URL: %q", view)
+	}
+}
+
+func TestConnectionModelSwitchesPresetsAndPreservesCustomURL(t *testing.T) {
+	t.Parallel()
+
+	model := newTestConnectionModel(nil)
+	model.connection.focusControl(connectionPresetControl)
+	model.Update(key("right"))
+	if model.connection.preset != customWebDAVPreset || !model.connection.hasControl(connectionURLControl) {
+		t.Fatal("right arrow did not select the custom WebDAV preset")
+	}
+	model.connection.inputs[connectionURLField].SetValue("https://example.com/dav")
+	model.Update(key("left"))
+	if model.connection.preset != seedhostPreset || model.connection.hasControl(connectionURLControl) {
+		t.Fatal("left arrow did not select the Seedhost preset")
+	}
+	model.Update(key("space"))
+	if model.connection.preset != customWebDAVPreset {
+		t.Fatal("space did not restore the custom WebDAV preset")
+	}
+	if value := model.connection.inputs[connectionURLField].Value(); value != "https://example.com/dav" {
+		t.Fatalf("custom URL = %q after preset switches", value)
+	}
+}
+
+func TestConnectionModelUsesCustomPresetForURLDefault(t *testing.T) {
+	t.Parallel()
+
+	model := NewConnectionModel(context.Background(), nil, ConnectionDefaults{
+		BaseURL:  "https://example.com/webdav",
+		Username: "seiz",
+	})
+	if model.connection.preset != customWebDAVPreset || model.connection.focus != connectionURLControl {
+		t.Fatal("a URL default did not select the custom WebDAV preset")
+	}
+	config, err := model.connection.config()
+	if err != nil {
+		t.Fatalf("config() error = %v", err)
+	}
+	if config.BaseURL != "https://example.com/webdav" || config.Username != "seiz" {
+		t.Fatalf("config() = %+v", config)
 	}
 }
 

@@ -2,7 +2,7 @@
 
 - [x] custom WebDAV URL configuration
 - [x] interactive WebDAV connection screen
-- [ ] Seedhost preset
+- [x] Seedhost preset
 - [x] HTTP Basic authentication with hidden input once per session
 - [x] WebDAV connection with timeout and cancellation
 - [x] parse `PROPFIND` XML responses

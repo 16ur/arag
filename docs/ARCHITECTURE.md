@@ -10,7 +10,7 @@ Responsibilities:
 
 - rendering;
 - adaptive terminal styling;
-- WebDAV connection form state;
+- WebDAV connection form and preset state;
 - navigation;
 - keyboard shortcuts;
 - loading, confirmation, and error states.
@@ -101,18 +101,20 @@ to it in plain text.
 ## Main flow
 
 1. Without a command-line URL, the UI displays the WebDAV connection form.
-2. Submitting the form runs a session factory in a Bubble Tea command.
-3. The factory validates configuration, creates the client, and loads the root
+2. The Seedhost preset derives its read-only URL from the username in
+   `Update()`. Custom WebDAV keeps an editable URL.
+3. Submitting the form runs a session factory in a Bubble Tea command.
+4. The factory validates configuration, creates the client, and loads the root
    with `PROPFIND`.
-4. A successful result replaces the connection form with the file browser.
-5. Subsequent navigation commands request only the current directory.
-6. `Update()` incorporates command results and `View()` renders state without
+5. A successful result replaces the connection form with the file browser.
+6. Subsequent navigation commands request only the current directory.
+7. `Update()` incorporates command results and `View()` renders state without
    performing I/O.
-7. After a file is confirmed, the streaming proxy creates a temporary local
+8. After a file is confirmed, the streaming proxy creates a temporary local
    URL for the authenticated remote media.
-8. The player opens the temporary local URL without receiving WebDAV
+9. The player opens the temporary local URL without receiving WebDAV
    credentials.
-9. The temporary endpoint remains available while arag is running and closes
+10. The temporary endpoint remains available while arag is running and closes
    when it is replaced or the application exits.
 
 When a command-line URL is provided, configuration creates the same client and

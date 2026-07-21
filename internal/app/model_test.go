@@ -659,6 +659,8 @@ func key(value string) tea.KeyPressMsg {
 		"up":        tea.KeyUp,
 		"down":      tea.KeyDown,
 		"left":      tea.KeyLeft,
+		"right":     tea.KeyRight,
+		"space":     ' ',
 		"enter":     tea.KeyEnter,
 		"backspace": tea.KeyBackspace,
 		"esc":       tea.KeyEscape,

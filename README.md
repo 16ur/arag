@@ -32,8 +32,10 @@ Launch the interactive connection screen with:
 go run ./cmd/arag
 ```
 
-Enter the WebDAV URL, username, and password, then select `Connect`. The
-password is masked and remains in memory only for the current session. A
+Seedhost is selected by default. Entering a username automatically generates
+`https://mud.seedhost.eu/<username>/webdav`; only the username and password are
+required. Select `Custom WebDAV` to enter another standard WebDAV server URL.
+The password is masked and remains in memory only for the current session. A
 successful connection opens the server root in the file browser.
 
 Advanced users and automated environments can still start directly with:
