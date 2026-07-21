@@ -11,8 +11,11 @@ server. With the Seedhost preset, this is the seedbox WebDAV root.
 - `i`: show or hide details for the selected entry;
 - `Esc`: close the details panel;
 - `?`: show or hide help;
-- `Ctrl+Q`: quit;
-- `Ctrl+C`: interrupt and quit.
+- `q`: open the quit confirmation;
+- `Ctrl+C`: interrupt and quit immediately.
+
+The quit confirmation requires `Enter` to close arag. `Esc` cancels it and
+restores the previous view without changing the current navigation state.
 
 The help view must list the shortcuts that are actually implemented. Arrow
 keys remain available so that the interface is accessible to users who do not

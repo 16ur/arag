@@ -461,21 +461,24 @@ func TestModelShowsRelevantDirectoryDetails(t *testing.T) {
 	}
 }
 
-func TestModelQuits(t *testing.T) {
+func TestModelConfirmsBeforeQuitting(t *testing.T) {
 	t.Parallel()
 
 	model := loadedModel("file")
 	_, command := model.Update(key("q"))
 	if command != nil {
-		t.Fatal("plain q unexpectedly quit the application")
+		t.Fatal("q unexpectedly quit the application")
+	}
+	if !model.confirmQuit || !strings.Contains(model.View().Content, "[ Quit arag? ]") {
+		t.Fatal("q did not open the quit confirmation")
 	}
 	select {
 	case <-model.ctx.Done():
-		t.Fatal("plain q canceled the model context")
+		t.Fatal("q canceled the model context before confirmation")
 	default:
 	}
 
-	_, command = model.Update(key("ctrl+q"))
+	_, command = model.Update(key("enter"))
 	if command == nil {
 		t.Fatal("quit command is nil")
 	}
@@ -486,6 +489,44 @@ func TestModelQuits(t *testing.T) {
 	case <-model.ctx.Done():
 	default:
 		t.Fatal("quit did not cancel the model context")
+	}
+}
+
+func TestModelCancelsQuitConfirmation(t *testing.T) {
+	t.Parallel()
+
+	model := loadedModel("file")
+	model.showDetails = true
+	model.Update(key("q"))
+	_, command := model.Update(key("esc"))
+	if command != nil || model.confirmQuit {
+		t.Fatal("Escape did not cancel the quit confirmation")
+	}
+	if !model.showDetails || !strings.Contains(model.View().Content, "[ Details ]") {
+		t.Fatal("canceling quit did not restore the previous view")
+	}
+	select {
+	case <-model.ctx.Done():
+		t.Fatal("canceling quit canceled the model context")
+	default:
+	}
+}
+
+func TestModelControlCQuitsImmediately(t *testing.T) {
+	t.Parallel()
+
+	model := loadedModel("file")
+	_, command := model.Update(key("ctrl+c"))
+	if command == nil {
+		t.Fatal("Ctrl+C quit command is nil")
+	}
+	if _, ok := command().(tea.QuitMsg); !ok {
+		t.Fatalf("Ctrl+C command returned %T", command())
+	}
+	select {
+	case <-model.ctx.Done():
+	default:
+		t.Fatal("Ctrl+C did not cancel the model context")
 	}
 }
 
@@ -500,8 +541,8 @@ func loadedModel(names ...string) *Model {
 }
 
 func key(value string) tea.KeyPressMsg {
-	if value == "ctrl+q" {
-		return tea.KeyPressMsg(tea.Key{Code: 'q', Mod: tea.ModCtrl})
+	if value == "ctrl+c" {
+		return tea.KeyPressMsg(tea.Key{Code: 'c', Mod: tea.ModCtrl})
 	}
 	keyCodes := map[string]rune{
 		"up":        tea.KeyUp,

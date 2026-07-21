@@ -44,6 +44,7 @@ type Model struct {
 	targetSelection  int
 	loading          bool
 	showDetails      bool
+	confirmQuit      bool
 	pendingOpen      *webdav.Entry
 	opening          bool
 	notice           string
@@ -135,14 +136,16 @@ func (m *Model) View() tea.View {
 	fmt.Fprintf(&content, "Location: %s\n\n", m.location())
 
 	switch {
+	case m.confirmQuit:
+		m.renderQuitConfirmation(&content)
 	case m.loading:
-		content.WriteString("Loading directory...\n\nctrl+q quit")
+		content.WriteString("Loading directory...\n\nq quit")
 	case m.err != nil:
-		fmt.Fprintf(&content, "Error: %s\n\nr retry  •  h/← back  •  ctrl+q quit", friendlyError(m.err))
+		fmt.Fprintf(&content, "Error: %s\n\nr retry  •  h/← back  •  q quit", friendlyError(m.err))
 	case len(m.entries) == 0:
-		content.WriteString("Empty directory.\n\nh/← back  •  ctrl+q quit")
+		content.WriteString("Empty directory.\n\nh/← back  •  q quit")
 	case m.opening:
-		content.WriteString("Opening video...\n\nctrl+q quit")
+		content.WriteString("Opening video...\n\nq quit")
 	case m.pendingOpen != nil:
 		m.renderConfirmation(&content)
 	case m.showDetails:
@@ -195,9 +198,23 @@ func (m *Model) finishRequest() {
 
 func (m *Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	keystroke := msg.Keystroke()
-	if keystroke == "ctrl+q" || keystroke == "ctrl+c" {
+	if keystroke == "ctrl+c" {
 		m.cancel()
 		return m, tea.Quit
+	}
+	if m.confirmQuit {
+		switch keystroke {
+		case "enter":
+			m.cancel()
+			return m, tea.Quit
+		case "esc":
+			m.confirmQuit = false
+		}
+		return m, nil
+	}
+	if keystroke == "q" {
+		m.confirmQuit = true
+		return m, nil
 	}
 	if m.pendingOpen != nil {
 		switch keystroke {
@@ -319,14 +336,20 @@ func (m *Model) renderEntries(content *strings.Builder) {
 	if m.notice != "" {
 		fmt.Fprintf(content, "\n%s", m.notice)
 	}
-	content.WriteString("\n↑/k up  •  ↓/j down  •  enter/l open  •  i details  •  h/← back  •  ctrl+q quit")
+	content.WriteString("\n↑/k up  •  ↓/j down  •  enter/l open  •  i details  •  h/← back  •  q quit")
 }
 
 func (m *Model) renderConfirmation(content *strings.Builder) {
 	content.WriteString("[ Open video? ]\n\n")
 	fmt.Fprintf(content, "%s\n", displayText(m.pendingOpen.Name))
 	fmt.Fprintf(content, "Size: %s\n", formatSize(m.pendingOpen.Size))
-	content.WriteString("\nenter confirm  •  esc cancel  •  ctrl+q quit")
+	content.WriteString("\nenter confirm  •  esc cancel  •  q quit")
+}
+
+func (m *Model) renderQuitConfirmation(content *strings.Builder) {
+	content.WriteString("[ Quit arag? ]\n\n")
+	content.WriteString("Your current navigation session will be closed.\n")
+	content.WriteString("\nenter confirm  •  esc cancel")
 }
 
 func (m *Model) renderDetails(content *strings.Builder) {
@@ -357,7 +380,7 @@ func (m *Model) renderDetails(content *strings.Builder) {
 	fmt.Fprintf(content, "Modified: %s\n", modified)
 	fmt.Fprintf(content, "ETag:     %s\n", etag)
 	fmt.Fprintf(content, "Path:     %s\n", path)
-	content.WriteString("\ni close  •  esc close  •  ctrl+q quit")
+	content.WriteString("\ni close  •  esc close  •  q quit")
 }
 
 func (m *Model) location() string {
