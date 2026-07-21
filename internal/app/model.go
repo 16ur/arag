@@ -22,23 +22,36 @@ type DirectoryReader interface {
 
 // Model stores the state of the arag terminal interface.
 type Model struct {
-	ctx      context.Context
-	cancel   context.CancelFunc
-	client   DirectoryReader
-	entries  []webdav.Entry
-	selected int
-	loading  bool
-	err      error
-	width    int
-	height   int
+	ctx              context.Context
+	cancel           context.CancelFunc
+	requestCancel    context.CancelFunc
+	requestID        uint64
+	client           DirectoryReader
+	currentDirectory *url.URL
+	history          []navigationFrame
+	entries          []webdav.Entry
+	selected         int
+	targetSelection  int
+	loading          bool
+	err              error
+	width            int
+	height           int
 }
 
 type entriesLoadedMsg struct {
-	entries []webdav.Entry
+	requestID uint64
+	entries   []webdav.Entry
+	selected  int
 }
 
 type loadFailedMsg struct {
-	err error
+	requestID uint64
+	err       error
+}
+
+type navigationFrame struct {
+	directory *url.URL
+	selected  int
 }
 
 // NewModel creates a model that loads the configured WebDAV root.
@@ -57,20 +70,28 @@ func NewModel(ctx context.Context, client DirectoryReader) *Model {
 
 // Init starts loading the WebDAV root outside the rendering path.
 func (m *Model) Init() tea.Cmd {
-	return m.loadRoot
+	return m.startLoad(nil, 0)
 }
 
 // Update handles WebDAV results, terminal resizing, and keyboard input.
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case entriesLoadedMsg:
+		if msg.requestID != m.requestID {
+			return m, nil
+		}
 		m.entries = sortedEntries(msg.entries)
-		m.selected = 0
+		m.selected = clampSelection(msg.selected, len(m.entries))
 		m.loading = false
 		m.err = nil
+		m.finishRequest()
 	case loadFailedMsg:
+		if msg.requestID != m.requestID {
+			return m, nil
+		}
 		m.loading = false
 		m.err = msg.err
+		m.finishRequest()
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
@@ -83,15 +104,16 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // View renders the current state without performing I/O or business logic.
 func (m *Model) View() tea.View {
 	var content strings.Builder
-	content.WriteString("arag\n\n")
+	content.WriteString("arag\n")
+	fmt.Fprintf(&content, "Location: %s\n\n", m.location())
 
 	switch {
 	case m.loading:
-		content.WriteString("Loading WebDAV root...\n\nq quit")
+		content.WriteString("Loading directory...\n\nq quit")
 	case m.err != nil:
-		fmt.Fprintf(&content, "Error: %s\n\nr retry  •  q quit", friendlyError(m.err))
+		fmt.Fprintf(&content, "Error: %s\n\nr retry  •  h/← back  •  q quit", friendlyError(m.err))
 	case len(m.entries) == 0:
-		content.WriteString("Empty directory.\n\nq quit")
+		content.WriteString("Empty directory.\n\nh/← back  •  q quit")
 	default:
 		m.renderEntries(&content)
 	}
@@ -102,12 +124,36 @@ func (m *Model) View() tea.View {
 	return view
 }
 
-func (m *Model) loadRoot() tea.Msg {
-	entries, err := m.client.ReadDir(m.ctx, nil)
-	if err != nil {
-		return loadFailedMsg{err: err}
+func (m *Model) startLoad(directory *url.URL, selected int) tea.Cmd {
+	if m.requestCancel != nil {
+		m.requestCancel()
 	}
-	return entriesLoadedMsg{entries: entries}
+	requestContext, cancel := context.WithCancel(m.ctx)
+	m.requestCancel = cancel
+	m.requestID++
+	m.targetSelection = selected
+	m.loading = true
+	m.err = nil
+
+	requestID := m.requestID
+	return func() tea.Msg {
+		entries, err := m.client.ReadDir(requestContext, directory)
+		if err != nil {
+			return loadFailedMsg{requestID: requestID, err: err}
+		}
+		return entriesLoadedMsg{
+			requestID: requestID,
+			entries:   entries,
+			selected:  selected,
+		}
+	}
+}
+
+func (m *Model) finishRequest() {
+	if m.requestCancel != nil {
+		m.requestCancel()
+		m.requestCancel = nil
+	}
 }
 
 func (m *Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
@@ -123,14 +169,42 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if !m.loading && m.err == nil && m.selected < len(m.entries)-1 {
 			m.selected++
 		}
+	case "enter", "l":
+		if !m.loading && m.err == nil && len(m.entries) > 0 {
+			return m, m.openSelected()
+		}
+	case "left", "h", "backspace":
+		return m.goBack()
 	case "r":
 		if m.err != nil {
-			m.loading = true
-			m.err = nil
-			return m, m.loadRoot
+			return m, m.startLoad(m.currentDirectory, m.targetSelection)
 		}
 	}
 	return m, nil
+}
+
+func (m *Model) openSelected() tea.Cmd {
+	entry := m.entries[m.selected]
+	if !entry.IsCollection || entry.URL == nil {
+		return nil
+	}
+	m.history = append(m.history, navigationFrame{
+		directory: cloneURL(m.currentDirectory),
+		selected:  m.selected,
+	})
+	m.currentDirectory = cloneURL(entry.URL)
+	return m.startLoad(m.currentDirectory, 0)
+}
+
+func (m *Model) goBack() (tea.Model, tea.Cmd) {
+	if len(m.history) == 0 {
+		return m, nil
+	}
+	last := len(m.history) - 1
+	frame := m.history[last]
+	m.history = m.history[:last]
+	m.currentDirectory = cloneURL(frame.directory)
+	return m, m.startLoad(m.currentDirectory, frame.selected)
 }
 
 func (m *Model) renderEntries(content *strings.Builder) {
@@ -150,14 +224,24 @@ func (m *Model) renderEntries(content *strings.Builder) {
 		name := truncate(entry.Name, m.nameWidth())
 		fmt.Fprintf(content, "%s%s %-8s %s\n", marker, kind, details, name)
 	}
-	content.WriteString("\n↑/k up  •  ↓/j down  •  q quit")
+	content.WriteString("\n↑/k up  •  ↓/j down  •  enter/l open  •  h/← back  •  q quit")
+}
+
+func (m *Model) location() string {
+	if m.currentDirectory == nil {
+		return "/"
+	}
+	if m.currentDirectory.Path == "" {
+		return "/"
+	}
+	return m.currentDirectory.Path
 }
 
 func (m *Model) visibleRows() int {
 	if m.height <= 0 {
 		return defaultVisibleRows
 	}
-	rows := m.height - 5
+	rows := m.height - 6
 	if rows < 1 {
 		return 1
 	}
@@ -199,6 +283,24 @@ func visibleRange(selected, total, limit int) (int, int) {
 		end = total
 	}
 	return start, end
+}
+
+func clampSelection(selected, total int) int {
+	if total == 0 || selected < 0 {
+		return 0
+	}
+	if selected >= total {
+		return total - 1
+	}
+	return selected
+}
+
+func cloneURL(value *url.URL) *url.URL {
+	if value == nil {
+		return nil
+	}
+	copy := *value
+	return &copy
 }
 
 func truncate(value string, width int) string {

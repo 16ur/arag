@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"net/url"
 	"strings"
 	"testing"
@@ -14,6 +15,22 @@ type fakeDirectoryReader struct {
 	entries []webdav.Entry
 	err     error
 	calls   int
+}
+
+type navigationReader struct {
+	entriesByPath map[string][]webdav.Entry
+	requests      []string
+	contexts      []context.Context
+}
+
+func (reader *navigationReader) ReadDir(ctx context.Context, directory *url.URL) ([]webdav.Entry, error) {
+	path := "/"
+	if directory != nil {
+		path = directory.Path
+	}
+	reader.requests = append(reader.requests, path)
+	reader.contexts = append(reader.contexts, ctx)
+	return reader.entriesByPath[path], nil
 }
 
 func (reader *fakeDirectoryReader) ReadDir(context.Context, *url.URL) ([]webdav.Entry, error) {
@@ -93,12 +110,101 @@ func TestModelDisplaysLoadingAndEmptyStates(t *testing.T) {
 	t.Parallel()
 
 	model := NewModel(context.Background(), &fakeDirectoryReader{})
-	if got := model.View().Content; !strings.Contains(got, "Loading WebDAV root") {
+	if got := model.View().Content; !strings.Contains(got, "Loading directory") {
 		t.Fatalf("loading View() = %q", got)
 	}
 	model.Update(entriesLoadedMsg{})
 	if got := model.View().Content; !strings.Contains(got, "Empty directory") {
 		t.Fatalf("empty View() = %q", got)
+	}
+}
+
+func TestModelNavigatesIntoDirectoryAndBack(t *testing.T) {
+	t.Parallel()
+
+	moviesURL, err := url.Parse("https://example.com/webdav/Movies/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	reader := &navigationReader{entriesByPath: map[string][]webdav.Entry{
+		"/webdav/Movies/": {{Name: "video.mkv", Size: 1024}},
+		"/": {
+			{Name: "Archive", IsCollection: true},
+			{Name: "Movies", URL: moviesURL, IsCollection: true},
+		},
+	}}
+	model := NewModel(context.Background(), reader)
+	model.Update(entriesLoadedMsg{entries: reader.entriesByPath["/"]})
+	model.Update(key("down"))
+
+	_, command := model.Update(key("enter"))
+	if command == nil || !model.loading {
+		t.Fatal("enter did not start directory loading")
+	}
+	model.Update(command())
+	if model.currentDirectory.String() != moviesURL.String() {
+		t.Fatalf("current directory = %v", model.currentDirectory)
+	}
+	if len(model.entries) != 1 || model.entries[0].Name != "video.mkv" {
+		t.Fatalf("child entries = %+v", model.entries)
+	}
+	if !strings.Contains(model.View().Content, "Location: /webdav/Movies/") {
+		t.Fatalf("View() = %q", model.View().Content)
+	}
+
+	_, command = model.Update(key("left"))
+	if command == nil {
+		t.Fatal("left did not start parent loading")
+	}
+	model.Update(command())
+	if model.currentDirectory != nil {
+		t.Fatalf("current directory = %v, want root", model.currentDirectory)
+	}
+	if model.selected != 1 {
+		t.Fatalf("selected = %d, want restored selection 1", model.selected)
+	}
+	if got := strings.Join(reader.requests, ","); got != "/webdav/Movies/,/" {
+		t.Fatalf("requests = %q", got)
+	}
+}
+
+func TestModelDoesNotOpenFile(t *testing.T) {
+	t.Parallel()
+
+	model := loadedModel("video.mkv")
+	_, command := model.Update(key("enter"))
+	if command != nil || len(model.history) != 0 {
+		t.Fatalf("file opened: command = %v, history = %+v", command, model.history)
+	}
+}
+
+func TestModelIgnoresStaleResponseAndCancelsPreviousRequest(t *testing.T) {
+	t.Parallel()
+
+	directory, err := url.Parse("https://example.com/webdav/Movies/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	reader := &navigationReader{entriesByPath: map[string][]webdav.Entry{
+		"/":               {{Name: "stale.mkv"}},
+		"/webdav/Movies/": {{Name: "current.mkv"}},
+	}}
+	model := NewModel(context.Background(), reader)
+	staleCommand := model.Init()
+	currentCommand := model.startLoad(directory, 0)
+
+	staleMsg := staleCommand()
+	if !errors.Is(reader.contexts[0].Err(), context.Canceled) {
+		t.Fatal("previous request context was not canceled")
+	}
+	model.Update(staleMsg)
+	if len(model.entries) != 0 || !model.loading {
+		t.Fatalf("stale response changed model: %+v", model.entries)
+	}
+
+	model.Update(currentCommand())
+	if len(model.entries) != 1 || model.entries[0].Name != "current.mkv" {
+		t.Fatalf("entries = %+v", model.entries)
 	}
 }
 
@@ -147,8 +253,11 @@ func loadedModel(names ...string) *Model {
 
 func key(value string) tea.KeyPressMsg {
 	keyCodes := map[string]rune{
-		"up":   tea.KeyUp,
-		"down": tea.KeyDown,
+		"up":        tea.KeyUp,
+		"down":      tea.KeyDown,
+		"left":      tea.KeyLeft,
+		"enter":     tea.KeyEnter,
+		"backspace": tea.KeyBackspace,
 	}
 	if code, ok := keyCodes[value]; ok {
 		return tea.KeyPressMsg(tea.Key{Code: code})

@@ -8,7 +8,7 @@
 - [x] normalize URLs and paths returned by the server
 - [x] lazy navigation with `Depth: 1`
 - [x] arrow-key and `hjkl` navigation
-- [ ] return to the parent directory
+- [x] return to the parent directory
 - [x] loading, empty, and error states
 - [ ] built-in help and discoverable shortcuts
 - [x] layout suitable for small terminals and long names

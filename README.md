@@ -34,7 +34,9 @@ go run ./cmd/arag \
 
 The password is then requested without being displayed. It remains in memory
 only while the command is running and is not stored. Once the interface opens,
-use the arrow keys or `j`/`k` to move the selection and `q` to quit.
+use the arrow keys or `j`/`k` to move the selection, `Enter` or `l` to open a
+directory, the left arrow or `h` to return to the parent directory, and `q` to
+quit.
 
 To display all available options:
 
