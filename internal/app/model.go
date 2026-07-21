@@ -8,12 +8,19 @@ import (
 	"net/url"
 	"sort"
 	"strings"
+	"time"
+	"unicode"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/16ur/arag/internal/webdav"
 )
 
-const defaultVisibleRows = 10
+const (
+	defaultVisibleRows = 10
+	maximumNameWidth   = 60
+	minimumNameWidth   = 4
+	fileSizeWidth      = 10
+)
 
 // DirectoryReader lists the contents of a WebDAV directory.
 type DirectoryReader interface {
@@ -33,6 +40,7 @@ type Model struct {
 	selected         int
 	targetSelection  int
 	loading          bool
+	showDetails      bool
 	err              error
 	width            int
 	height           int
@@ -114,6 +122,8 @@ func (m *Model) View() tea.View {
 		fmt.Fprintf(&content, "Error: %s\n\nr retry  •  h/← back  •  q quit", friendlyError(m.err))
 	case len(m.entries) == 0:
 		content.WriteString("Empty directory.\n\nh/← back  •  q quit")
+	case m.showDetails:
+		m.renderDetails(&content)
 	default:
 		m.renderEntries(&content)
 	}
@@ -133,6 +143,7 @@ func (m *Model) startLoad(directory *url.URL, selected int) tea.Cmd {
 	m.requestID++
 	m.targetSelection = selected
 	m.loading = true
+	m.showDetails = false
 	m.err = nil
 
 	requestID := m.requestID
@@ -157,10 +168,19 @@ func (m *Model) finishRequest() {
 }
 
 func (m *Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
-	switch msg.Keystroke() {
-	case "q", "ctrl+c":
+	keystroke := msg.Keystroke()
+	if keystroke == "q" || keystroke == "ctrl+c" {
 		m.cancel()
 		return m, tea.Quit
+	}
+	if m.showDetails {
+		if keystroke == "i" || keystroke == "esc" {
+			m.showDetails = false
+		}
+		return m, nil
+	}
+
+	switch keystroke {
 	case "up", "k":
 		if !m.loading && m.err == nil && m.selected > 0 {
 			m.selected--
@@ -175,6 +195,10 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 	case "left", "h", "backspace":
 		return m.goBack()
+	case "i":
+		if !m.loading && m.err == nil && len(m.entries) > 0 {
+			m.showDetails = true
+		}
 	case "r":
 		if m.err != nil {
 			return m, m.startLoad(m.currentDirectory, m.targetSelection)
@@ -215,16 +239,46 @@ func (m *Model) renderEntries(content *strings.Builder) {
 		if index == m.selected {
 			marker = "> "
 		}
-		kind := "[F]"
-		details := formatSize(entry.Size)
+		nameWidth := m.nameWidth()
+		name := truncate(displayText(entry.Name), nameWidth)
 		if entry.IsCollection {
-			kind = "[D]"
-			details = ""
+			fmt.Fprintf(content, "%s[D] %s\n", marker, name)
+			continue
 		}
-		name := truncate(entry.Name, m.nameWidth())
-		fmt.Fprintf(content, "%s%s %-8s %s\n", marker, kind, details, name)
+		fmt.Fprintf(content, "%s[F] %-*s %*s\n", marker, nameWidth, name, fileSizeWidth, formatSize(entry.Size))
 	}
-	content.WriteString("\n↑/k up  •  ↓/j down  •  enter/l open  •  h/← back  •  q quit")
+	content.WriteString("\n↑/k up  •  ↓/j down  •  enter/l open  •  i details  •  h/← back  •  q quit")
+}
+
+func (m *Model) renderDetails(content *strings.Builder) {
+	entry := m.entries[m.selected]
+	entryType := "File"
+	size := formatSize(entry.Size)
+	if entry.IsCollection {
+		entryType = "Directory"
+		size = "Not applicable"
+	}
+	modified := "Not available"
+	if !entry.ModTime.IsZero() {
+		modified = entry.ModTime.Format(time.RFC3339)
+	}
+	etag := displayText(entry.ETag)
+	if etag == "" {
+		etag = "Not available"
+	}
+	path := "Not available"
+	if entry.URL != nil {
+		path = displayText(entry.URL.Path)
+	}
+
+	content.WriteString("[ Details ]\n\n")
+	fmt.Fprintf(content, "Name:     %s\n", displayText(entry.Name))
+	fmt.Fprintf(content, "Type:     %s\n", entryType)
+	fmt.Fprintf(content, "Size:     %s\n", size)
+	fmt.Fprintf(content, "Modified: %s\n", modified)
+	fmt.Fprintf(content, "ETag:     %s\n", etag)
+	fmt.Fprintf(content, "Path:     %s\n", path)
+	content.WriteString("\ni close  •  esc close  •  q quit")
 }
 
 func (m *Model) location() string {
@@ -234,7 +288,7 @@ func (m *Model) location() string {
 	if m.currentDirectory.Path == "" {
 		return "/"
 	}
-	return m.currentDirectory.Path
+	return displayText(m.currentDirectory.Path)
 }
 
 func (m *Model) visibleRows() int {
@@ -250,11 +304,14 @@ func (m *Model) visibleRows() int {
 
 func (m *Model) nameWidth() int {
 	if m.width <= 0 {
-		return 60
+		return maximumNameWidth
 	}
-	width := m.width - 18
-	if width < 8 {
-		return 8
+	width := m.width - 17
+	if width < minimumNameWidth {
+		return minimumNameWidth
+	}
+	if width > maximumNameWidth {
+		return maximumNameWidth
 	}
 	return width
 }
@@ -312,6 +369,15 @@ func truncate(value string, width int) string {
 		return "…"
 	}
 	return string(runes[:width-1]) + "…"
+}
+
+func displayText(value string) string {
+	return strings.Map(func(character rune) rune {
+		if unicode.IsControl(character) {
+			return '�'
+		}
+		return character
+	}, value)
 }
 
 func formatSize(size int64) string {

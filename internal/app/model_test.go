@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/16ur/arag/internal/webdav"
@@ -223,6 +224,118 @@ func TestModelAdaptsToSmallTerminal(t *testing.T) {
 	}
 }
 
+func TestModelTruncatesNamesToUniformMaximumWidth(t *testing.T) {
+	t.Parallel()
+
+	longName := strings.Repeat("a", maximumNameWidth+10) + ".mkv"
+	model := NewModel(context.Background(), &fakeDirectoryReader{})
+	model.Update(entriesLoadedMsg{entries: []webdav.Entry{
+		{Name: longName},
+		{Name: "short.mkv"},
+	}})
+	model.Update(tea.WindowSizeMsg{Width: 120, Height: 20})
+
+	view := model.View().Content
+	if strings.Contains(view, longName) || !strings.Contains(view, "…") {
+		t.Fatalf("name was not truncated: %q", view)
+	}
+	if model.nameWidth() != maximumNameWidth {
+		t.Fatalf("name width = %d, want %d", model.nameWidth(), maximumNameWidth)
+	}
+}
+
+func TestModelDisplaysSizesForFilesOnly(t *testing.T) {
+	t.Parallel()
+
+	model := NewModel(context.Background(), &fakeDirectoryReader{})
+	model.Update(entriesLoadedMsg{entries: []webdav.Entry{
+		{Name: "Movies", IsCollection: true},
+		{Name: "video.mkv", Size: 2048},
+	}})
+	lines := strings.Split(model.View().Content, "\n")
+	var directoryLine, fileLine string
+	for _, line := range lines {
+		if strings.Contains(line, "Movies") {
+			directoryLine = line
+		}
+		if strings.Contains(line, "video.mkv") {
+			fileLine = line
+		}
+	}
+	if directoryLine != "> [D] Movies" {
+		t.Fatalf("directory line = %q", directoryLine)
+	}
+	if !strings.HasSuffix(fileLine, "2.0 KiB") {
+		t.Fatalf("file line = %q", fileLine)
+	}
+}
+
+func TestModelShowsCompleteEntryDetails(t *testing.T) {
+	t.Parallel()
+
+	entryURL, err := url.Parse("https://example.com/webdav/Movies/a-very-long-video-name.mkv")
+	if err != nil {
+		t.Fatal(err)
+	}
+	modified := time.Date(2026, time.July, 21, 14, 30, 0, 0, time.UTC)
+	model := NewModel(context.Background(), &fakeDirectoryReader{})
+	model.Update(entriesLoadedMsg{entries: []webdav.Entry{{
+		Name:    "a-very-long-video-name.mkv",
+		URL:     entryURL,
+		Size:    2048,
+		ModTime: modified,
+		ETag:    "video-tag",
+	}}})
+
+	model.Update(key("i"))
+	view := model.View().Content
+	wanted := []string{
+		"[ Details ]",
+		"Name:     a-very-long-video-name.mkv",
+		"Type:     File",
+		"Size:     2.0 KiB",
+		"Modified: 2026-07-21T14:30:00Z",
+		"ETag:     video-tag",
+		"Path:     /webdav/Movies/a-very-long-video-name.mkv",
+	}
+	for _, value := range wanted {
+		if !strings.Contains(view, value) {
+			t.Errorf("View() does not contain %q:\n%s", value, view)
+		}
+	}
+
+	model.Update(key("down"))
+	if model.selected != 0 {
+		t.Fatal("selection moved while details were open")
+	}
+	model.Update(key("esc"))
+	if model.showDetails || strings.Contains(model.View().Content, "[ Details ]") {
+		t.Fatal("Escape did not close details")
+	}
+}
+
+func TestModelShowsRelevantDirectoryDetails(t *testing.T) {
+	t.Parallel()
+
+	directoryURL, err := url.Parse("https://example.com/webdav/Movies/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	model := NewModel(context.Background(), &fakeDirectoryReader{})
+	model.Update(entriesLoadedMsg{entries: []webdav.Entry{{
+		Name:         "Movies",
+		URL:          directoryURL,
+		IsCollection: true,
+	}}})
+	model.Update(key("i"))
+	view := model.View().Content
+	if !strings.Contains(view, "Type:     Directory") ||
+		!strings.Contains(view, "Size:     Not applicable") ||
+		!strings.Contains(view, "Modified: Not available") {
+		t.Fatalf("View() = %q", view)
+	}
+}
+
 func TestModelQuits(t *testing.T) {
 	t.Parallel()
 
@@ -258,6 +371,7 @@ func key(value string) tea.KeyPressMsg {
 		"left":      tea.KeyLeft,
 		"enter":     tea.KeyEnter,
 		"backspace": tea.KeyBackspace,
+		"esc":       tea.KeyEscape,
 	}
 	if code, ok := keyCodes[value]; ok {
 		return tea.KeyPressMsg(tea.Key{Code: code})

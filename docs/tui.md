@@ -8,6 +8,8 @@ server. With the Seedhost preset, this is the seedbox WebDAV root.
 - up/down arrows or `j`/`k`: move the selection;
 - `Enter` or `l`: enter a directory or select a file;
 - left arrow, `h`, or `Backspace`: return to the parent directory;
+- `i`: show or hide details for the selected entry;
+- `Esc`: close the details panel;
 - `?`: show or hide help;
 - `q`: quit.
 
@@ -21,12 +23,38 @@ For a supported video file, `Enter` displays a confirmation before opening it
 in IINA. The confirmation clearly identifies the file and allows cancellation
 without side effects.
 
+## Entry details
+
+Pressing `i` opens a details panel for the selected file or directory. The
+panel displays:
+
+- the complete name;
+- the entry type;
+- the file size, when relevant;
+- the modification date, when available;
+- the ETag, when available;
+- the WebDAV path without credentials.
+
+The panel closes with `i` or `Esc`. Navigation keys do not change the
+selection while it is open.
+
+## List layout
+
+Directory rows display only their type marker and truncated name. arag does not
+calculate directory sizes because that would require recursively loading the
+remote tree.
+
+File rows also display their size, aligned to the right of the uniform name
+column. Complete names and other metadata remain available in the details
+panel.
+
 ## Display states
 
 - loading;
 - empty directory;
 - available contents;
 - confirmation prompt;
+- entry details;
 - recoverable error.
 
 Errors distinguish at least:
