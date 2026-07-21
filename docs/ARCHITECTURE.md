@@ -54,9 +54,10 @@ address and an explicit port. It invokes `/usr/bin/open` directly with
 separate arguments and never through a shell. Remote URLs, credentials,
 queries, and fragments are rejected before process execution.
 
-Passing authentication to the player must not expose credentials in logs,
-error messages, or files. This requires a technical validation before the IINA
-integration is finalized.
+The IINA launcher is composed with the streaming proxy by the `Streaming`
+player. Authentication remains inside the proxy and is never included in the
+URL or arguments passed to IINA. A failed player launch closes the newly
+created stream. A successful launch replaces and closes the previous stream.
 
 ---
 
@@ -101,3 +102,5 @@ to it in plain text.
    URL for the authenticated remote media.
 7. The player opens the temporary local URL without receiving WebDAV
    credentials.
+8. The temporary endpoint remains available while arag is running and closes
+   when it is replaced or the application exits.

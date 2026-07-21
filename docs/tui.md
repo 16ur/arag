@@ -25,15 +25,16 @@ case. For a supported video file, `Enter` or `l` displays a confirmation before
 opening it in IINA. The confirmation clearly identifies the complete file name
 and size. `Enter` confirms and `Esc` cancels without side effects.
 
-Confirmation now dispatches the selected URL through the player contract in a
-Bubble Tea command. The production player is still an explicit unavailable
-placeholder, so no external process is started yet. The UI displays the player
+Confirmation dispatches the selected URL through the player contract in a
+Bubble Tea command. The production player starts a temporary authenticated
+loopback stream and opens its local URL in IINA. The UI displays the player
 result when the command completes. Unsupported file types do not open the
 confirmation prompt and produce an explanatory message instead.
 
-The IINA process launcher is implemented independently but is not connected to
-the proxy yet. It accepts only temporary loopback URLs and rejects direct
-WebDAV URLs or URLs containing credentials.
+IINA receives only a random temporary URL bound to `127.0.0.1`. It never
+receives the remote WebDAV URL or credentials. The launcher rejects direct
+WebDAV URLs and local URLs containing credentials. The active stream closes
+when another video replaces it or when arag exits.
 
 ## Entry details
 

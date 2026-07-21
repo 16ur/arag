@@ -17,7 +17,7 @@ func TestProxyForwardsAuthenticatedRangeRequest(t *testing.T) {
 
 	upstream := httptest.NewTLSServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		username, password, ok := request.BasicAuth()
-		if !ok || username != "axel" || password != "secret" {
+		if !ok || username != "seiz" || password != "secret" {
 			t.Errorf("BasicAuth() = %q, %q, %v", username, password, ok)
 		}
 		if request.Method != http.MethodGet {
@@ -44,7 +44,7 @@ func TestProxyForwardsAuthenticatedRangeRequest(t *testing.T) {
 	defer upstream.Close()
 
 	proxy := NewProxy(Config{
-		Username:   "axel",
+		Username:   "seiz",
 		Password:   "secret",
 		HTTPClient: upstream.Client(),
 	})
@@ -169,7 +169,7 @@ func TestProxyRejectsCrossOriginRedirect(t *testing.T) {
 	}))
 	defer upstream.Close()
 
-	session := startSession(t, NewProxy(Config{Username: "axel", Password: "secret"}), upstream.URL+"/video.mkv")
+	session := startSession(t, NewProxy(Config{Username: "seiz", Password: "secret"}), upstream.URL+"/video.mkv")
 	defer session.Close()
 	response, err := http.Get(session.URL().String())
 	if err != nil {

@@ -24,7 +24,7 @@ func TestClientReadDir(t *testing.T) {
 			t.Errorf("Depth = %q, want 1", depth)
 		}
 		username, password, ok := request.BasicAuth()
-		if !ok || username != "axel" || password != "secret" {
+		if !ok || username != "seiz" || password != "secret" {
 			t.Errorf("BasicAuth = %q, %q, %v", username, password, ok)
 		}
 
@@ -51,7 +51,7 @@ func TestClientReadDir(t *testing.T) {
 
 	client, err := NewClient(Config{
 		BaseURL:  server.URL + "/webdav",
-		Username: "axel",
+		Username: "seiz",
 		Password: "secret",
 	})
 	if err != nil {

@@ -16,6 +16,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/16ur/arag/internal/app"
 	"github.com/16ur/arag/internal/player"
+	"github.com/16ur/arag/internal/streaming"
 	"github.com/16ur/arag/internal/webdav"
 	"github.com/charmbracelet/x/term"
 )
@@ -28,9 +29,11 @@ type directoryReader interface {
 
 type clientFactory func(webdav.Config) (directoryReader, error)
 
+type playerFactory func(string, string) player.Player
+
 type passwordReader func(uintptr) ([]byte, error)
 
-type interfaceRunner func(context.Context, directoryReader, uintptr, io.Writer) error
+type interfaceRunner func(context.Context, directoryReader, player.Player, uintptr, io.Writer) error
 
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -46,6 +49,13 @@ func main() {
 		term.ReadPassword,
 		func(config webdav.Config) (directoryReader, error) {
 			return webdav.NewClient(config)
+		},
+		func(username, password string) player.Player {
+			proxy := streaming.NewProxy(streaming.Config{
+				Username: username,
+				Password: password,
+			})
+			return player.NewStreaming(proxy, player.NewIINA())
 		},
 		runInterface,
 	)
@@ -67,6 +77,7 @@ func run(
 	getenv func(string) string,
 	readPassword passwordReader,
 	newClient clientFactory,
+	newPlayer playerFactory,
 	startInterface interfaceRunner,
 ) error {
 	flags := flag.NewFlagSet("arag", flag.ContinueOnError)
@@ -109,17 +120,27 @@ func run(
 	if err != nil {
 		return fmt.Errorf("invalid WebDAV configuration: %w", err)
 	}
+	videoPlayer := newPlayer(*username, password)
+	if videoPlayer == nil {
+		return errors.New("configure video player: player is unavailable")
+	}
 
-	if err := startInterface(ctx, client, stdinFD, stdout); err != nil {
+	if err := startInterface(ctx, client, videoPlayer, stdinFD, stdout); err != nil {
 		return fmt.Errorf("run terminal interface: %w", err)
 	}
 	return nil
 }
 
-func runInterface(ctx context.Context, client directoryReader, stdinFD uintptr, output io.Writer) error {
+func runInterface(
+	ctx context.Context,
+	client directoryReader,
+	videoPlayer player.Player,
+	stdinFD uintptr,
+	output io.Writer,
+) error {
 	input := os.NewFile(stdinFD, "stdin")
 	program := tea.NewProgram(
-		app.NewModel(ctx, client, player.Unavailable{}),
+		app.NewModel(ctx, client, videoPlayer),
 		tea.WithContext(ctx),
 		tea.WithInput(input),
 		tea.WithOutput(output),

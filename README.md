@@ -8,9 +8,9 @@ supported preset because it is the project's initial use case.
 
 ## Project status
 
-arag is under development. It can currently connect to a WebDAV server, load
-the root directory, and display it in an interactive terminal interface. The
-MVP will also provide:
+arag is under development. It can currently connect to a WebDAV server, browse
+directories, inspect entries, and open supported videos in IINA through a
+temporary authenticated streaming endpoint. The MVP provides:
 
 - connection to a WebDAV server;
 - directory browsing without loading the entire tree;
@@ -37,8 +37,9 @@ only while the command is running and is not stored. Once the interface opens,
 use the arrow keys or `j`/`k` to move the selection, `Enter` or `l` to open a
 directory, `i` to inspect the complete selected entry, the left arrow or `h`
 to return to the parent directory, and `Ctrl+Q` to quit. Pressing `Enter` or
-`l` on an MKV or MP4 file opens a confirmation prompt. Player launch is not
-connected yet.
+`l` on an MKV or MP4 file opens a confirmation prompt. Confirming starts a
+temporary local stream and opens it in IINA. IINA receives neither the WebDAV
+password nor the remote media URL. Closing arag also stops the local stream.
 
 To display all available options:
 
