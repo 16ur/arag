@@ -15,6 +15,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/16ur/arag/internal/app"
+	"github.com/16ur/arag/internal/player"
 	"github.com/16ur/arag/internal/webdav"
 	"github.com/charmbracelet/x/term"
 )
@@ -118,7 +119,7 @@ func run(
 func runInterface(ctx context.Context, client directoryReader, stdinFD uintptr, output io.Writer) error {
 	input := os.NewFile(stdinFD, "stdin")
 	program := tea.NewProgram(
-		app.NewModel(ctx, client),
+		app.NewModel(ctx, client, player.Unavailable{}),
 		tea.WithContext(ctx),
 		tea.WithInput(input),
 		tea.WithOutput(output),

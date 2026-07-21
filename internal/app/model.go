@@ -13,6 +13,7 @@ import (
 	"unicode"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/16ur/arag/internal/player"
 	"github.com/16ur/arag/internal/webdav"
 )
 
@@ -35,6 +36,7 @@ type Model struct {
 	requestCancel    context.CancelFunc
 	requestID        uint64
 	client           DirectoryReader
+	player           player.Player
 	currentDirectory *url.URL
 	history          []navigationFrame
 	entries          []webdav.Entry
@@ -43,7 +45,7 @@ type Model struct {
 	loading          bool
 	showDetails      bool
 	pendingOpen      *webdav.Entry
-	confirmedEntry   *webdav.Entry
+	opening          bool
 	notice           string
 	err              error
 	width            int
@@ -66,8 +68,14 @@ type navigationFrame struct {
 	selected  int
 }
 
+type videoOpenedMsg struct{}
+
+type videoOpenFailedMsg struct {
+	err error
+}
+
 // NewModel creates a model that loads the configured WebDAV root.
-func NewModel(ctx context.Context, client DirectoryReader) *Model {
+func NewModel(ctx context.Context, client DirectoryReader, videoPlayer player.Player) *Model {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -76,6 +84,7 @@ func NewModel(ctx context.Context, client DirectoryReader) *Model {
 		ctx:     ctx,
 		cancel:  cancel,
 		client:  client,
+		player:  videoPlayer,
 		loading: true,
 	}
 }
@@ -104,6 +113,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.loading = false
 		m.err = msg.err
 		m.finishRequest()
+	case videoOpenedMsg:
+		m.opening = false
+		m.notice = "Video sent to the player."
+	case videoOpenFailedMsg:
+		m.opening = false
+		m.notice = playerError(msg.err)
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
@@ -126,6 +141,8 @@ func (m *Model) View() tea.View {
 		fmt.Fprintf(&content, "Error: %s\n\nr retry  •  h/← back  •  ctrl+q quit", friendlyError(m.err))
 	case len(m.entries) == 0:
 		content.WriteString("Empty directory.\n\nh/← back  •  ctrl+q quit")
+	case m.opening:
+		content.WriteString("Opening video...\n\nctrl+q quit")
 	case m.pendingOpen != nil:
 		m.renderConfirmation(&content)
 	case m.showDetails:
@@ -151,7 +168,7 @@ func (m *Model) startLoad(directory *url.URL, selected int) tea.Cmd {
 	m.loading = true
 	m.showDetails = false
 	m.pendingOpen = nil
-	m.confirmedEntry = nil
+	m.opening = false
 	m.notice = ""
 	m.err = nil
 
@@ -185,12 +202,15 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if m.pendingOpen != nil {
 		switch keystroke {
 		case "enter":
-			m.confirmedEntry = cloneEntry(m.pendingOpen)
+			entry := cloneEntry(m.pendingOpen)
 			m.pendingOpen = nil
-			m.notice = "Video confirmed. Player integration is not available yet."
+			return m, m.openVideo(entry)
 		case "esc":
 			m.pendingOpen = nil
 		}
+		return m, nil
+	}
+	if m.opening {
 		return m, nil
 	}
 	if m.showDetails {
@@ -249,6 +269,24 @@ func (m *Model) activateSelected() tea.Cmd {
 	})
 	m.currentDirectory = cloneURL(entry.URL)
 	return m.startLoad(m.currentDirectory, 0)
+}
+
+func (m *Model) openVideo(entry *webdav.Entry) tea.Cmd {
+	m.opening = true
+	m.notice = ""
+	mediaURL := cloneURL(entry.URL)
+	return func() tea.Msg {
+		if mediaURL == nil {
+			return videoOpenFailedMsg{err: errors.New("video URL is unavailable")}
+		}
+		if m.player == nil {
+			return videoOpenFailedMsg{err: player.ErrUnavailable}
+		}
+		if err := m.player.Open(m.ctx, mediaURL); err != nil {
+			return videoOpenFailedMsg{err: err}
+		}
+		return videoOpenedMsg{}
+	}
 }
 
 func (m *Model) goBack() (tea.Model, tea.Cmd) {
@@ -471,4 +509,11 @@ func friendlyError(err error) string {
 	default:
 		return err.Error()
 	}
+}
+
+func playerError(err error) string {
+	if errors.Is(err, player.ErrUnavailable) {
+		return "Player integration is not available yet."
+	}
+	return "Could not open video: " + displayText(err.Error())
 }

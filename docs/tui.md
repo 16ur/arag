@@ -25,9 +25,11 @@ case. For a supported video file, `Enter` or `l` displays a confirmation before
 opening it in IINA. The confirmation clearly identifies the complete file name
 and size. `Enter` confirms and `Esc` cancels without side effects.
 
-Until the player integration is implemented, confirmation is recorded only in
-the UI state and no external process is started. Unsupported file types do not
-open the confirmation prompt and produce an explanatory message instead.
+Confirmation now dispatches the selected URL through the player contract in a
+Bubble Tea command. The production player is still an explicit unavailable
+placeholder, so no external process is started yet. The UI displays the player
+result when the command completes. Unsupported file types do not open the
+confirmation prompt and produce an explanatory message instead.
 
 ## Entry details
 

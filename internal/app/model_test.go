@@ -9,6 +9,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/16ur/arag/internal/player"
 	"github.com/16ur/arag/internal/webdav"
 )
 
@@ -22,6 +23,18 @@ type navigationReader struct {
 	entriesByPath map[string][]webdav.Entry
 	requests      []string
 	contexts      []context.Context
+}
+
+type fakeVideoPlayer struct {
+	openedURL *url.URL
+	err       error
+	calls     int
+}
+
+func (videoPlayer *fakeVideoPlayer) Open(_ context.Context, mediaURL *url.URL) error {
+	videoPlayer.calls++
+	videoPlayer.openedURL = cloneURL(mediaURL)
+	return videoPlayer.err
 }
 
 func (reader *navigationReader) ReadDir(ctx context.Context, directory *url.URL) ([]webdav.Entry, error) {
@@ -46,7 +59,7 @@ func TestModelLoadsAndSortsRootEntries(t *testing.T) {
 		{Name: "video.mkv", Size: 2048},
 		{Name: "Movies", IsCollection: true},
 	}}
-	model := NewModel(context.Background(), reader)
+	model := NewModel(context.Background(), reader, player.Unavailable{})
 
 	msg := model.Init()()
 	updated, command := model.Update(msg)
@@ -89,7 +102,7 @@ func TestModelDisplaysAndRetriesError(t *testing.T) {
 	t.Parallel()
 
 	reader := &fakeDirectoryReader{err: webdav.ErrAuthentication}
-	model := NewModel(context.Background(), reader)
+	model := NewModel(context.Background(), reader, player.Unavailable{})
 	model.Update(model.Init()())
 	if got := model.View().Content; !strings.Contains(got, "server rejected the credentials") {
 		t.Fatalf("View() = %q", got)
@@ -110,7 +123,7 @@ func TestModelDisplaysAndRetriesError(t *testing.T) {
 func TestModelDisplaysLoadingAndEmptyStates(t *testing.T) {
 	t.Parallel()
 
-	model := NewModel(context.Background(), &fakeDirectoryReader{})
+	model := NewModel(context.Background(), &fakeDirectoryReader{}, player.Unavailable{})
 	if got := model.View().Content; !strings.Contains(got, "Loading directory") {
 		t.Fatalf("loading View() = %q", got)
 	}
@@ -134,7 +147,7 @@ func TestModelNavigatesIntoDirectoryAndBack(t *testing.T) {
 			{Name: "Movies", URL: moviesURL, IsCollection: true},
 		},
 	}}
-	model := NewModel(context.Background(), reader)
+	model := NewModel(context.Background(), reader, player.Unavailable{})
 	model.Update(entriesLoadedMsg{entries: reader.entriesByPath["/"]})
 	model.Update(key("down"))
 
@@ -172,15 +185,15 @@ func TestModelNavigatesIntoDirectoryAndBack(t *testing.T) {
 func TestModelAsksForConfirmationBeforeOpeningVideo(t *testing.T) {
 	t.Parallel()
 
-	model := NewModel(context.Background(), &fakeDirectoryReader{})
+	model := NewModel(context.Background(), &fakeDirectoryReader{}, player.Unavailable{})
 	model.Update(entriesLoadedMsg{entries: []webdav.Entry{{
 		Name: "A Movie.MKV",
 		Size: 2 << 30,
 	}}})
 
 	_, command := model.Update(key("enter"))
-	if command != nil || model.pendingOpen == nil || model.confirmedEntry != nil {
-		t.Fatalf("confirmation state = pending %v, confirmed %v, command %v", model.pendingOpen, model.confirmedEntry, command)
+	if command != nil || model.pendingOpen == nil {
+		t.Fatalf("confirmation state = pending %v, command %v", model.pendingOpen, command)
 	}
 	view := model.View().Content
 	if !strings.Contains(view, "[ Open video? ]") ||
@@ -199,18 +212,63 @@ func TestModelAsksForConfirmationBeforeOpeningVideo(t *testing.T) {
 	}
 }
 
-func TestModelConfirmsVideoWithoutStartingPlayer(t *testing.T) {
+func TestModelConfirmsVideoThroughPlayer(t *testing.T) {
 	t.Parallel()
 
-	model := loadedModel("video.mp4")
+	mediaURL, err := url.Parse("http://127.0.0.1/video.mp4")
+	if err != nil {
+		t.Fatal(err)
+	}
+	videoPlayer := &fakeVideoPlayer{}
+	model := NewModel(context.Background(), &fakeDirectoryReader{}, videoPlayer)
+	model.Update(entriesLoadedMsg{entries: []webdav.Entry{{Name: "video.mp4", URL: mediaURL}}})
 	model.Update(key("enter"))
 	_, command := model.Update(key("enter"))
-	if command != nil || model.pendingOpen != nil || model.confirmedEntry == nil {
-		t.Fatalf("confirmation state = pending %v, confirmed %v, command %v", model.pendingOpen, model.confirmedEntry, command)
+	if command == nil || model.pendingOpen != nil || !model.opening {
+		t.Fatalf("confirmation state = pending %v, opening %v, command %v", model.pendingOpen, model.opening, command)
 	}
-	if model.confirmedEntry.Name != "video.mp4" {
-		t.Fatalf("confirmed entry = %+v", model.confirmedEntry)
+	if !strings.Contains(model.View().Content, "Opening video") {
+		t.Fatalf("View() = %q", model.View().Content)
 	}
+	model.Update(command())
+	if videoPlayer.calls != 1 || videoPlayer.openedURL.String() != mediaURL.String() {
+		t.Fatalf("player calls = %d, URL = %v", videoPlayer.calls, videoPlayer.openedURL)
+	}
+	if model.opening || !strings.Contains(model.View().Content, "Video sent to the player") {
+		t.Fatalf("View() = %q", model.View().Content)
+	}
+}
+
+func TestModelDisplaysPlayerFailure(t *testing.T) {
+	t.Parallel()
+
+	mediaURL, err := url.Parse("http://127.0.0.1/video.mkv")
+	if err != nil {
+		t.Fatal(err)
+	}
+	videoPlayer := &fakeVideoPlayer{err: errors.New("launch failed")}
+	model := NewModel(context.Background(), &fakeDirectoryReader{}, videoPlayer)
+	model.Update(entriesLoadedMsg{entries: []webdav.Entry{{Name: "video.mkv", URL: mediaURL}}})
+	model.Update(key("enter"))
+	_, command := model.Update(key("enter"))
+	model.Update(command())
+	if model.opening || !strings.Contains(model.View().Content, "Could not open video: launch failed") {
+		t.Fatalf("View() = %q", model.View().Content)
+	}
+}
+
+func TestModelDisplaysUnavailablePlayer(t *testing.T) {
+	t.Parallel()
+
+	mediaURL, err := url.Parse("http://127.0.0.1/video.mp4")
+	if err != nil {
+		t.Fatal(err)
+	}
+	model := NewModel(context.Background(), &fakeDirectoryReader{}, player.Unavailable{})
+	model.Update(entriesLoadedMsg{entries: []webdav.Entry{{Name: "video.mp4", URL: mediaURL}}})
+	model.Update(key("enter"))
+	_, command := model.Update(key("enter"))
+	model.Update(command())
 	if !strings.Contains(model.View().Content, "Player integration is not available yet") {
 		t.Fatalf("View() = %q", model.View().Content)
 	}
@@ -221,7 +279,7 @@ func TestModelRejectsUnsupportedFile(t *testing.T) {
 
 	model := loadedModel("subtitle.srt")
 	_, command := model.Update(key("enter"))
-	if command != nil || model.pendingOpen != nil || model.confirmedEntry != nil {
+	if command != nil || model.pendingOpen != nil || model.opening {
 		t.Fatalf("unsupported file changed open state")
 	}
 	if !strings.Contains(model.View().Content, "Only MKV and MP4 videos") {
@@ -257,7 +315,7 @@ func TestModelIgnoresStaleResponseAndCancelsPreviousRequest(t *testing.T) {
 		"/":               {{Name: "stale.mkv"}},
 		"/webdav/Movies/": {{Name: "current.mkv"}},
 	}}
-	model := NewModel(context.Background(), reader)
+	model := NewModel(context.Background(), reader, player.Unavailable{})
 	staleCommand := model.Init()
 	currentCommand := model.startLoad(directory, 0)
 
@@ -295,7 +353,7 @@ func TestModelTruncatesNamesToUniformMaximumWidth(t *testing.T) {
 	t.Parallel()
 
 	longName := strings.Repeat("a", maximumNameWidth+10) + ".mkv"
-	model := NewModel(context.Background(), &fakeDirectoryReader{})
+	model := NewModel(context.Background(), &fakeDirectoryReader{}, player.Unavailable{})
 	model.Update(entriesLoadedMsg{entries: []webdav.Entry{
 		{Name: longName},
 		{Name: "short.mkv"},
@@ -314,7 +372,7 @@ func TestModelTruncatesNamesToUniformMaximumWidth(t *testing.T) {
 func TestModelDisplaysSizesForFilesOnly(t *testing.T) {
 	t.Parallel()
 
-	model := NewModel(context.Background(), &fakeDirectoryReader{})
+	model := NewModel(context.Background(), &fakeDirectoryReader{}, player.Unavailable{})
 	model.Update(entriesLoadedMsg{entries: []webdav.Entry{
 		{Name: "Movies", IsCollection: true},
 		{Name: "video.mkv", Size: 2048},
@@ -345,7 +403,7 @@ func TestModelShowsCompleteEntryDetails(t *testing.T) {
 		t.Fatal(err)
 	}
 	modified := time.Date(2026, time.July, 21, 14, 30, 0, 0, time.UTC)
-	model := NewModel(context.Background(), &fakeDirectoryReader{})
+	model := NewModel(context.Background(), &fakeDirectoryReader{}, player.Unavailable{})
 	model.Update(entriesLoadedMsg{entries: []webdav.Entry{{
 		Name:    "a-very-long-video-name.mkv",
 		URL:     entryURL,
@@ -388,7 +446,7 @@ func TestModelShowsRelevantDirectoryDetails(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	model := NewModel(context.Background(), &fakeDirectoryReader{})
+	model := NewModel(context.Background(), &fakeDirectoryReader{}, player.Unavailable{})
 	model.Update(entriesLoadedMsg{entries: []webdav.Entry{{
 		Name:         "Movies",
 		URL:          directoryURL,
@@ -436,7 +494,7 @@ func loadedModel(names ...string) *Model {
 	for index, name := range names {
 		entries[index] = webdav.Entry{Name: name}
 	}
-	model := NewModel(context.Background(), &fakeDirectoryReader{})
+	model := NewModel(context.Background(), &fakeDirectoryReader{}, player.Unavailable{})
 	model.Update(entriesLoadedMsg{entries: entries})
 	return model
 }
