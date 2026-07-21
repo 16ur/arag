@@ -9,12 +9,12 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
-	"sort"
 	"strings"
 	"syscall"
-	"text/tabwriter"
 	"time"
 
+	tea "charm.land/bubbletea/v2"
+	"github.com/16ur/arag/internal/app"
 	"github.com/16ur/arag/internal/webdav"
 	"github.com/charmbracelet/x/term"
 )
@@ -28,6 +28,8 @@ type directoryReader interface {
 type clientFactory func(webdav.Config) (directoryReader, error)
 
 type passwordReader func(uintptr) ([]byte, error)
+
+type interfaceRunner func(context.Context, directoryReader, uintptr, io.Writer) error
 
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -44,12 +46,13 @@ func main() {
 		func(config webdav.Config) (directoryReader, error) {
 			return webdav.NewClient(config)
 		},
+		runInterface,
 	)
 	if errors.Is(err, flag.ErrHelp) {
 		return
 	}
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %s\n", friendlyError(err))
+		fmt.Fprintf(os.Stderr, "Error: %s\n", err)
 		os.Exit(1)
 	}
 }
@@ -63,6 +66,7 @@ func run(
 	getenv func(string) string,
 	readPassword passwordReader,
 	newClient clientFactory,
+	startInterface interfaceRunner,
 ) error {
 	flags := flag.NewFlagSet("arag", flag.ContinueOnError)
 	flags.SetOutput(stderr)
@@ -73,7 +77,7 @@ func run(
 	flags.Usage = func() {
 		fmt.Fprintln(stderr, "Usage: arag -url URL [-user USERNAME] [-timeout DURATION]")
 		fmt.Fprintln(stderr)
-		fmt.Fprintln(stderr, "Lists the contents of a WebDAV server root.")
+		fmt.Fprintln(stderr, "Browses the contents of a WebDAV server root.")
 		fmt.Fprintln(stderr, "The password is entered without echo and is not stored.")
 		fmt.Fprintln(stderr)
 		flags.PrintDefaults()
@@ -105,12 +109,22 @@ func run(
 		return fmt.Errorf("invalid WebDAV configuration: %w", err)
 	}
 
-	entries, err := client.ReadDir(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("read WebDAV root: %w", err)
+	if err := startInterface(ctx, client, stdinFD, stdout); err != nil {
+		return fmt.Errorf("run terminal interface: %w", err)
 	}
-	printEntries(stdout, entries)
 	return nil
+}
+
+func runInterface(ctx context.Context, client directoryReader, stdinFD uintptr, output io.Writer) error {
+	input := os.NewFile(stdinFD, "stdin")
+	program := tea.NewProgram(
+		app.NewModel(ctx, client),
+		tea.WithContext(ctx),
+		tea.WithInput(input),
+		tea.WithOutput(output),
+	)
+	_, err := program.Run()
+	return err
 }
 
 func getPassword(
@@ -134,64 +148,4 @@ func getPassword(
 		return "", fmt.Errorf("read password without echo: %w", err)
 	}
 	return string(password), nil
-}
-
-func printEntries(writer io.Writer, entries []webdav.Entry) {
-	if len(entries) == 0 {
-		fmt.Fprintln(writer, "Empty directory.")
-		return
-	}
-
-	sort.Slice(entries, func(left, right int) bool {
-		if entries[left].IsCollection != entries[right].IsCollection {
-			return entries[left].IsCollection
-		}
-		return strings.ToLower(entries[left].Name) < strings.ToLower(entries[right].Name)
-	})
-
-	table := tabwriter.NewWriter(writer, 0, 4, 2, ' ', 0)
-	for _, entry := range entries {
-		kind := "FILE"
-		size := formatSize(entry.Size)
-		if entry.IsCollection {
-			kind = "DIRECTORY"
-			size = "-"
-		}
-		fmt.Fprintf(table, "%s\t%s\t%s\n", kind, size, entry.Name)
-	}
-	_ = table.Flush()
-}
-
-func formatSize(size int64) string {
-	if size < 1024 {
-		return fmt.Sprintf("%d B", size)
-	}
-	units := []string{"KiB", "MiB", "GiB", "TiB"}
-	value := float64(size)
-	unit := "B"
-	for _, candidate := range units {
-		value /= 1024
-		unit = candidate
-		if value < 1024 {
-			break
-		}
-	}
-	return fmt.Sprintf("%.1f %s", value, unit)
-}
-
-func friendlyError(err error) string {
-	switch {
-	case errors.Is(err, webdav.ErrAuthentication):
-		return "the server rejected the credentials"
-	case errors.Is(err, webdav.ErrUnexpectedStatus):
-		return "the server did not return a valid WebDAV response"
-	case errors.Is(err, webdav.ErrInvalidResponse):
-		return "the WebDAV XML response is invalid"
-	case errors.Is(err, context.DeadlineExceeded):
-		return "the server took too long to respond"
-	case errors.Is(err, context.Canceled):
-		return "operation canceled"
-	default:
-		return err.Error()
-	}
 }

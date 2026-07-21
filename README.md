@@ -8,7 +8,9 @@ supported preset because it is the project's initial use case.
 
 ## Project status
 
-arag is under development. The MVP will provide:
+arag is under development. It can currently connect to a WebDAV server, load
+the root directory, and display it in an interactive terminal interface. The
+MVP will also provide:
 
 - connection to a WebDAV server;
 - directory browsing without loading the entire tree;
@@ -20,9 +22,9 @@ other players, including VLC.
 
 See the [roadmap](docs/ROADMAP.md) for the planned scope.
 
-## Test a WebDAV connection
+## Run arag
 
-The first functional command lists the contents of a WebDAV root:
+Run the current interactive root browser with:
 
 ```bash
 go run ./cmd/arag \
@@ -31,7 +33,8 @@ go run ./cmd/arag \
 ```
 
 The password is then requested without being displayed. It remains in memory
-only while the command is running and is not stored.
+only while the command is running and is not stored. Once the interface opens,
+use the arrow keys or `j`/`k` to move the selection and `q` to quit.
 
 To display all available options:
 

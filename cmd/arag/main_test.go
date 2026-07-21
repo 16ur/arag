@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"io"
 	"net/url"
 	"strings"
 	"testing"
@@ -12,28 +13,25 @@ import (
 	"github.com/16ur/arag/internal/webdav"
 )
 
-type fakeReader struct {
-	entries []webdav.Entry
-	err     error
+type fakeReader struct{}
+
+func (fakeReader) ReadDir(context.Context, *url.URL) ([]webdav.Entry, error) {
+	return nil, nil
 }
 
-func (reader fakeReader) ReadDir(context.Context, *url.URL) ([]webdav.Entry, error) {
-	return reader.entries, reader.err
-}
-
-func TestRunListsRootAndPromptsForPassword(t *testing.T) {
+func TestRunBuildsClientAndStartsInterface(t *testing.T) {
 	t.Parallel()
 
-	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	var receivedConfig webdav.Config
 	passwordReads := 0
+	interfaceStarted := false
 
 	err := run(
 		context.Background(),
 		[]string{"-url", "https://example.com/webdav", "-user", "axel", "-timeout", "5s"},
 		0,
-		&stdout,
+		&bytes.Buffer{},
 		&stderr,
 		func(string) string { return "" },
 		func(uintptr) ([]byte, error) {
@@ -42,10 +40,11 @@ func TestRunListsRootAndPromptsForPassword(t *testing.T) {
 		},
 		func(config webdav.Config) (directoryReader, error) {
 			receivedConfig = config
-			return fakeReader{entries: []webdav.Entry{
-				{Name: "video.mkv", Size: 2048},
-				{Name: "Films", IsCollection: true},
-			}}, nil
+			return fakeReader{}, nil
+		},
+		func(context.Context, directoryReader, uintptr, io.Writer) error {
+			interfaceStarted = true
+			return nil
 		},
 	)
 	if err != nil {
@@ -60,15 +59,11 @@ func TestRunListsRootAndPromptsForPassword(t *testing.T) {
 		receivedConfig.RequestTimeout != 5*time.Second {
 		t.Errorf("config = %+v", receivedConfig)
 	}
+	if !interfaceStarted {
+		t.Error("interface was not started")
+	}
 	if !strings.Contains(stderr.String(), "WebDAV password") {
 		t.Errorf("stderr = %q", stderr.String())
-	}
-	output := stdout.String()
-	if strings.Index(output, "Films") > strings.Index(output, "video.mkv") {
-		t.Errorf("directories should be listed first:\n%s", output)
-	}
-	if !strings.Contains(output, "DIRECTORY") || !strings.Contains(output, "2.0 KiB") {
-		t.Errorf("stdout = %q", output)
 	}
 }
 
@@ -96,6 +91,7 @@ func TestRunUsesEnvironmentPassword(t *testing.T) {
 			receivedPassword = config.Password
 			return fakeReader{}, nil
 		},
+		successfulInterface,
 	)
 	if err != nil {
 		t.Fatalf("run() error = %v", err)
@@ -117,6 +113,7 @@ func TestRunRequiresURL(t *testing.T) {
 			t.Fatal("client factory must not be called")
 			return nil, nil
 		},
+		successfulInterface,
 	)
 	if err == nil || !strings.Contains(err.Error(), "-url") {
 		t.Fatalf("run() error = %v", err)
@@ -126,9 +123,10 @@ func TestRunRequiresURL(t *testing.T) {
 	}
 }
 
-func TestRunPropagatesWebDAVError(t *testing.T) {
+func TestRunPropagatesInterfaceError(t *testing.T) {
 	t.Parallel()
 
+	want := errors.New("interface failed")
 	err := run(
 		context.Background(),
 		[]string{"-url", "https://example.com/webdav"},
@@ -137,24 +135,14 @@ func TestRunPropagatesWebDAVError(t *testing.T) {
 		&bytes.Buffer{},
 		func(string) string { return "" },
 		func(uintptr) ([]byte, error) { return nil, nil },
-		func(webdav.Config) (directoryReader, error) {
-			return fakeReader{err: webdav.ErrAuthentication}, nil
-		},
+		func(webdav.Config) (directoryReader, error) { return fakeReader{}, nil },
+		func(context.Context, directoryReader, uintptr, io.Writer) error { return want },
 	)
-	if !errors.Is(err, webdav.ErrAuthentication) {
+	if !errors.Is(err, want) {
 		t.Fatalf("run() error = %v", err)
-	}
-	if got := friendlyError(err); got != "the server rejected the credentials" {
-		t.Errorf("friendlyError() = %q", got)
 	}
 }
 
-func TestPrintEntriesEmpty(t *testing.T) {
-	t.Parallel()
-
-	var output bytes.Buffer
-	printEntries(&output, nil)
-	if output.String() != "Empty directory.\n" {
-		t.Errorf("output = %q", output.String())
-	}
+func successfulInterface(context.Context, directoryReader, uintptr, io.Writer) error {
+	return nil
 }

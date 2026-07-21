@@ -1,21 +1,21 @@
 # MVP
 
-- [ ] custom WebDAV URL configuration
+- [x] custom WebDAV URL configuration
 - [ ] Seedhost preset
-- [ ] HTTP Basic authentication with hidden input once per session
-- [ ] WebDAV connection with timeout and cancellation
-- [ ] parse `PROPFIND` XML responses
-- [ ] normalize URLs and paths returned by the server
-- [ ] lazy navigation with `Depth: 1`
-- [ ] arrow-key and `hjkl` navigation
+- [x] HTTP Basic authentication with hidden input once per session
+- [x] WebDAV connection with timeout and cancellation
+- [x] parse `PROPFIND` XML responses
+- [x] normalize URLs and paths returned by the server
+- [x] lazy navigation with `Depth: 1`
+- [x] arrow-key and `hjkl` navigation
 - [ ] return to the parent directory
-- [ ] loading, empty, and error states
+- [x] loading, empty, and error states
 - [ ] built-in help and discoverable shortcuts
-- [ ] layout suitable for small terminals and long names
+- [x] layout suitable for small terminals and long names
 - [ ] confirmation before opening a video
 - [ ] open videos in IINA without exposing credentials
-- [ ] unit tests for the XML parser
-- [ ] integration tests with a local fake WebDAV server
+- [x] unit tests for the XML parser
+- [x] integration tests with a local fake WebDAV server
 - [ ] installation and configuration documentation
 
 ---
