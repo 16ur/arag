@@ -10,6 +10,7 @@ Responsibilities:
 
 - rendering;
 - adaptive terminal styling;
+- WebDAV connection form state;
 - navigation;
 - keyboard shortcuts;
 - loading, confirmation, and error states.
@@ -99,14 +100,21 @@ to it in plain text.
 
 ## Main flow
 
-1. Configuration prepares a WebDAV client.
-2. A Bubble Tea command requests the contents of the current directory.
-3. The client runs `PROPFIND` and returns Go values.
-4. `Update()` incorporates the result into the UI state.
-5. `View()` renders that state.
-6. After a file is confirmed, the streaming proxy creates a temporary local
+1. Without a command-line URL, the UI displays the WebDAV connection form.
+2. Submitting the form runs a session factory in a Bubble Tea command.
+3. The factory validates configuration, creates the client, and loads the root
+   with `PROPFIND`.
+4. A successful result replaces the connection form with the file browser.
+5. Subsequent navigation commands request only the current directory.
+6. `Update()` incorporates command results and `View()` renders state without
+   performing I/O.
+7. After a file is confirmed, the streaming proxy creates a temporary local
    URL for the authenticated remote media.
-7. The player opens the temporary local URL without receiving WebDAV
+8. The player opens the temporary local URL without receiving WebDAV
    credentials.
-8. The temporary endpoint remains available while arag is running and closes
+9. The temporary endpoint remains available while arag is running and closes
    when it is replaced or the application exits.
+
+When a command-line URL is provided, configuration creates the same client and
+player before starting Bubble Tea, preserving a non-interactive entry path for
+advanced users and automation.

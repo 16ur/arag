@@ -18,7 +18,7 @@ func TestProxyForwardsAuthenticatedRangeRequest(t *testing.T) {
 	upstream := httptest.NewTLSServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		username, password, ok := request.BasicAuth()
 		if !ok || username != "seiz" || password != "secret" {
-			t.Errorf("BasicAuth() = %q, %q, %v", username, password, ok)
+			t.Error("upstream request did not contain the expected Basic authentication")
 		}
 		if request.Method != http.MethodGet {
 			t.Errorf("method = %q, want GET", request.Method)

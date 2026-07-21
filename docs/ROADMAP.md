@@ -1,6 +1,7 @@
 # MVP
 
 - [x] custom WebDAV URL configuration
+- [x] interactive WebDAV connection screen
 - [ ] Seedhost preset
 - [x] HTTP Basic authentication with hidden input once per session
 - [x] WebDAV connection with timeout and cancellation
@@ -37,9 +38,9 @@
 
 ## Quality criteria
 
-- [ ] no network requests or business logic in `View()`
+- [x] no network requests or business logic in `View()`
 - [ ] no secrets in files, logs, or error messages
-- [ ] no information communicated through color alone
+- [x] no information communicated through color alone
 - [ ] distinct errors for invalid URLs, rejected authentication, unavailable
       servers, and invalid WebDAV responses
-- [ ] navigation usable without knowing Vim shortcuts
+- [x] navigation usable without knowing Vim shortcuts

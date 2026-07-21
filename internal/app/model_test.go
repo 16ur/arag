@@ -652,6 +652,9 @@ func key(value string) tea.KeyPressMsg {
 	if value == "ctrl+c" {
 		return tea.KeyPressMsg(tea.Key{Code: 'c', Mod: tea.ModCtrl})
 	}
+	if value == "shift+tab" {
+		return tea.KeyPressMsg(tea.Key{Code: tea.KeyTab, Mod: tea.ModShift})
+	}
 	keyCodes := map[string]rune{
 		"up":        tea.KeyUp,
 		"down":      tea.KeyDown,
@@ -659,6 +662,7 @@ func key(value string) tea.KeyPressMsg {
 		"enter":     tea.KeyEnter,
 		"backspace": tea.KeyBackspace,
 		"esc":       tea.KeyEscape,
+		"tab":       tea.KeyTab,
 	}
 	if code, ok := keyCodes[value]; ok {
 		return tea.KeyPressMsg(tea.Key{Code: code})

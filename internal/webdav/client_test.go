@@ -25,7 +25,7 @@ func TestClientReadDir(t *testing.T) {
 		}
 		username, password, ok := request.BasicAuth()
 		if !ok || username != "seiz" || password != "secret" {
-			t.Errorf("BasicAuth = %q, %q, %v", username, password, ok)
+			t.Error("request did not contain the expected Basic authentication")
 		}
 
 		writer.Header().Set("Content-Type", "application/xml")

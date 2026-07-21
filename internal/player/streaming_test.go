@@ -56,7 +56,7 @@ func TestStreamingPlayerConnectsProxyToLauncher(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		username, password, ok := request.BasicAuth()
 		if !ok || username != "seiz" || password != "secret" {
-			t.Errorf("BasicAuth() = %q, %q, %v", username, password, ok)
+			t.Error("upstream request did not contain the expected Basic authentication")
 		}
 		if request.Header.Get("Range") != "bytes=0-3" {
 			t.Errorf("Range = %q", request.Header.Get("Range"))

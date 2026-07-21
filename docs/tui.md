@@ -1,7 +1,30 @@
 # TUI
 
-At startup, arag loads and displays the contents of the configured WebDAV
-server. With the Seedhost preset, this is the seedbox WebDAV root.
+Without command-line connection options, arag starts on a WebDAV connection
+screen. A successful connection loads and displays the server root.
+
+## Connection
+
+The connection screen contains three fields:
+
+- WebDAV server URL;
+- username;
+- masked password.
+
+`Tab`, `Shift+Tab`, or the up/down arrows move between controls. `Enter` moves
+to the next field and submits only when the `Connect` button is selected.
+`Esc` opens the quit confirmation, while `Ctrl+C` exits immediately. The
+letter `q` remains available while editing because it may be part of a URL,
+username, or password.
+
+Submitting starts authentication and the initial root `PROPFIND` in a Bubble
+Tea command. `Esc` cancels an in-progress attempt. Authentication and network
+errors remain on the form so the user can correct a value and retry.
+
+After a successful connection, the password value is removed from the form.
+The authenticated WebDAV client and streaming player retain the credentials in
+memory only for the lifetime of the application. Command-line options remain
+available to bypass the form.
 
 ## Navigation
 
@@ -73,6 +96,8 @@ uses the complete width. Complete metadata remains available with `i`.
 
 ## Display states
 
+- connection form;
+- connecting;
 - loading;
 - empty directory;
 - available contents;

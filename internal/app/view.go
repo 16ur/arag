@@ -53,9 +53,19 @@ func (m *Model) View() tea.View {
 }
 
 func (m *Model) renderHeader(theme viewTheme, width int) string {
-	left := theme.brand.Render("arag") + theme.muted.Render(" · ") + theme.breadcrumb.Render(m.location())
+	left := theme.brand.Render("arag")
+	if m.connection != nil {
+		left += theme.muted.Render(" · ") + theme.breadcrumb.Render("Connect")
+	} else {
+		left += theme.muted.Render(" · ") + theme.breadcrumb.Render(m.location())
+	}
 	statusText := "● Connected"
-	if m.loading {
+	if m.connection != nil {
+		statusText = "○ Not connected"
+		if m.connecting {
+			statusText = "… Connecting"
+		}
+	} else if m.loading {
 		statusText = "… Loading"
 	} else if m.err != nil {
 		statusText = "! Connection issue"
@@ -73,6 +83,10 @@ func (m *Model) renderBody(theme viewTheme, width, height int) string {
 	switch {
 	case m.confirmQuit:
 		return m.renderQuitModal(theme, width, height)
+	case m.connection != nil && m.connecting:
+		return renderCenteredState(theme, width, height, "Connecting to WebDAV…", "Authenticating and loading the root directory")
+	case m.connection != nil:
+		return m.renderConnectionForm(theme, width, height)
 	case m.pendingOpen != nil:
 		return m.renderOpenModal(theme, width, height)
 	case m.showDetails:
@@ -254,6 +268,12 @@ func (m *Model) renderFooter(theme viewTheme, width int) string {
 	switch {
 	case m.confirmQuit:
 		shortcuts = []string{"enter", "confirm", "esc", "cancel"}
+	case m.connection != nil && m.connecting:
+		shortcuts = []string{"esc", "cancel"}
+	case m.connection != nil && m.connection.focus == connectionSubmitButton:
+		shortcuts = []string{"enter", "connect", "shift+tab", "previous", "esc", "quit"}
+	case m.connection != nil:
+		shortcuts = []string{"tab", "next", "shift+tab", "previous", "enter", "next", "esc", "quit"}
 	case m.pendingOpen != nil:
 		shortcuts = []string{"enter", "open", "esc", "cancel", "q", "quit"}
 	case m.showDetails:
@@ -278,6 +298,12 @@ func (m *Model) renderFooter(theme viewTheme, width int) string {
 		switch {
 		case m.confirmQuit:
 			shortcuts = []string{"enter", "yes", "esc", "no"}
+		case m.connection != nil && m.connecting:
+			shortcuts = []string{"esc", "cancel"}
+		case m.connection != nil && m.connection.focus == connectionSubmitButton:
+			shortcuts = []string{"enter", "connect", "esc", "quit"}
+		case m.connection != nil:
+			shortcuts = []string{"tab", "next", "esc", "quit"}
 		case m.pendingOpen != nil:
 			shortcuts = []string{"enter", "open", "esc", "back"}
 		case m.showDetails:
@@ -328,7 +354,7 @@ func (m *Model) selectedEntry() *webdav.Entry {
 }
 
 func (m *Model) canShowBrowser() bool {
-	return !m.loading && m.err == nil && !m.opening && m.pendingOpen == nil && !m.showDetails && !m.confirmQuit && len(m.entries) > 0
+	return m.connection == nil && !m.loading && m.err == nil && !m.opening && m.pendingOpen == nil && !m.showDetails && !m.confirmQuit && len(m.entries) > 0
 }
 
 func essentialEntryType(entry webdav.Entry) string {

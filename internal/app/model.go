@@ -23,28 +23,33 @@ type DirectoryReader interface {
 
 // Model stores the state of the arag terminal interface.
 type Model struct {
-	ctx              context.Context
-	cancel           context.CancelFunc
-	requestCancel    context.CancelFunc
-	requestID        uint64
-	client           DirectoryReader
-	player           player.Player
-	currentDirectory *url.URL
-	history          []navigationFrame
-	entries          []webdav.Entry
-	selected         int
-	targetSelection  int
-	loading          bool
-	showDetails      bool
-	confirmQuit      bool
-	pendingOpen      *webdav.Entry
-	opening          bool
-	notice           string
-	noticeIsError    bool
-	err              error
-	width            int
-	height           int
-	darkBackground   bool
+	ctx                 context.Context
+	cancel              context.CancelFunc
+	requestCancel       context.CancelFunc
+	requestID           uint64
+	connectionCancel    context.CancelFunc
+	connectionAttemptID uint64
+	client              DirectoryReader
+	player              player.Player
+	sessionFactory      SessionFactory
+	connection          *connectionForm
+	connecting          bool
+	currentDirectory    *url.URL
+	history             []navigationFrame
+	entries             []webdav.Entry
+	selected            int
+	targetSelection     int
+	loading             bool
+	showDetails         bool
+	confirmQuit         bool
+	pendingOpen         *webdav.Entry
+	opening             bool
+	notice              string
+	noticeIsError       bool
+	err                 error
+	width               int
+	height              int
+	darkBackground      bool
 }
 
 type entriesLoadedMsg struct {
@@ -71,16 +76,34 @@ type videoOpenFailedMsg struct {
 
 // NewModel creates a model that loads the configured WebDAV root.
 func NewModel(ctx context.Context, client DirectoryReader, videoPlayer player.Player) *Model {
+	model := newBaseModel(ctx)
+	model.client = client
+	model.player = videoPlayer
+	model.loading = true
+	return model
+}
+
+// NewConnectionModel creates a model that starts with a WebDAV connection
+// form and transitions to the browser after authentication succeeds.
+func NewConnectionModel(
+	ctx context.Context,
+	factory SessionFactory,
+	defaults ConnectionDefaults,
+) *Model {
+	model := newBaseModel(ctx)
+	model.sessionFactory = factory
+	model.connection = newConnectionForm(defaults, model.darkBackground)
+	return model
+}
+
+func newBaseModel(ctx context.Context) *Model {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	ctx, cancel := context.WithCancel(ctx)
+	modelContext, cancel := context.WithCancel(ctx)
 	return &Model{
-		ctx:            ctx,
+		ctx:            modelContext,
 		cancel:         cancel,
-		client:         client,
-		player:         videoPlayer,
-		loading:        true,
 		darkBackground: true,
 	}
 }
@@ -88,12 +111,51 @@ func NewModel(ctx context.Context, client DirectoryReader, videoPlayer player.Pl
 // Init detects the terminal theme and starts loading the WebDAV root outside
 // the rendering path.
 func (m *Model) Init() tea.Cmd {
+	if m.connection != nil {
+		return tea.Batch(m.connection.init(), tea.RequestBackgroundColor)
+	}
 	return tea.Batch(m.startLoad(nil, 0), tea.RequestBackgroundColor)
 }
 
 // Update handles WebDAV results, terminal resizing, and keyboard input.
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case sessionConnectedMsg:
+		if m.connection == nil || msg.attemptID != m.connectionAttemptID {
+			return m, nil
+		}
+		m.connection.clearPassword()
+		if m.connectionCancel != nil {
+			m.connectionCancel()
+		}
+		m.connection = nil
+		m.sessionFactory = nil
+		m.connectionCancel = nil
+		m.connecting = false
+		m.client = msg.session.Client
+		m.player = msg.session.Player
+		m.entries = sortedEntries(msg.session.Entries)
+		m.selected = 0
+		m.currentDirectory = nil
+		m.history = nil
+		m.loading = false
+		m.err = nil
+		m.clearNotice()
+	case connectionFailedMsg:
+		if m.connection == nil || msg.attemptID != m.connectionAttemptID {
+			return m, nil
+		}
+		if m.connectionCancel != nil {
+			m.connectionCancel()
+			m.connectionCancel = nil
+		}
+		m.connecting = false
+		m.connection.err = msg.err
+		focus := connectionURLField
+		if errors.Is(msg.err, webdav.ErrAuthentication) {
+			focus = connectionPasswordField
+		}
+		return m, m.connection.focusControl(focus)
 	case entriesLoadedMsg:
 		if msg.requestID != m.requestID {
 			return m, nil
@@ -121,10 +183,22 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
+		if m.connection != nil {
+			m.connection.resize(msg.Width)
+		}
 	case tea.BackgroundColorMsg:
 		m.darkBackground = msg.IsDark()
+		if m.connection != nil {
+			m.connection.applyTheme(newViewTheme(m.darkBackground))
+		}
 	case tea.KeyPressMsg:
+		if m.connection != nil {
+			return m.handleConnectionKey(msg)
+		}
 		return m.handleKey(msg)
+	}
+	if m.connection != nil {
+		return m, m.connection.update(msg)
 	}
 	return m, nil
 }

@@ -112,3 +112,24 @@ redirects and never operates as a general-purpose proxy.
 
 External players receive only the temporary loopback URL. They never receive
 WebDAV credentials.
+
+---
+
+# ADR 008: Interactive connection as the default entry point
+
+## Context
+
+Requiring WebDAV flags before the TUI starts makes initial use unnecessarily
+technical. The application still needs a direct path for automation and
+experienced users.
+
+## Decision
+
+Starting arag without a WebDAV URL displays a connection form inside the TUI.
+The form collects a server URL, username, and masked password. Submitting it
+creates and validates the session in a Bubble Tea command before transitioning
+to the file browser.
+
+Command-line connection options remain supported and bypass the form. The
+password field is cleared after a successful connection, and credentials are
+never persisted by the form.

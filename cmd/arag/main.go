@@ -33,7 +33,7 @@ type playerFactory func(string, string) player.Player
 
 type passwordReader func(uintptr) ([]byte, error)
 
-type interfaceRunner func(context.Context, directoryReader, player.Player, uintptr, io.Writer) error
+type interfaceRunner func(context.Context, *app.Model, uintptr, io.Writer) error
 
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -83,14 +83,14 @@ func run(
 	flags := flag.NewFlagSet("arag", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 
-	baseURL := flags.String("url", "", "WebDAV root URL (required)")
+	baseURL := flags.String("url", "", "WebDAV root URL (skips the interactive connection screen)")
 	username := flags.String("user", "", "WebDAV username")
 	timeout := flags.Duration("timeout", 30*time.Second, "maximum duration of a WebDAV request")
 	flags.Usage = func() {
-		fmt.Fprintln(stderr, "Usage: arag -url URL [-user USERNAME] [-timeout DURATION]")
+		fmt.Fprintln(stderr, "Usage: arag [-url URL] [-user USERNAME] [-timeout DURATION]")
 		fmt.Fprintln(stderr)
-		fmt.Fprintln(stderr, "Browses the contents of a WebDAV server root.")
-		fmt.Fprintln(stderr, "The password is entered without echo and is not stored.")
+		fmt.Fprintln(stderr, "Launches an interactive WebDAV connection screen when no URL is provided.")
+		fmt.Fprintln(stderr, "With -url, the password is entered without echo and is not stored.")
 		fmt.Fprintln(stderr)
 		flags.PrintDefaults()
 	}
@@ -102,8 +102,15 @@ func run(
 		return fmt.Errorf("unexpected argument %q", flags.Arg(0))
 	}
 	if strings.TrimSpace(*baseURL) == "" {
-		flags.Usage()
-		return fmt.Errorf("the -url option is required")
+		model := app.NewConnectionModel(
+			ctx,
+			newSessionFactory(*timeout, newClient, newPlayer),
+			app.ConnectionDefaults{Username: *username},
+		)
+		if err := startInterface(ctx, model, stdinFD, stdout); err != nil {
+			return fmt.Errorf("run terminal interface: %w", err)
+		}
+		return nil
 	}
 
 	password, err := getPassword(*username, stdinFD, stderr, getenv, readPassword)
@@ -125,7 +132,8 @@ func run(
 		return errors.New("configure video player: player is unavailable")
 	}
 
-	if err := startInterface(ctx, client, videoPlayer, stdinFD, stdout); err != nil {
+	model := app.NewModel(ctx, client, videoPlayer)
+	if err := startInterface(ctx, model, stdinFD, stdout); err != nil {
 		return fmt.Errorf("run terminal interface: %w", err)
 	}
 	return nil
@@ -133,20 +141,50 @@ func run(
 
 func runInterface(
 	ctx context.Context,
-	client directoryReader,
-	videoPlayer player.Player,
+	model *app.Model,
 	stdinFD uintptr,
 	output io.Writer,
 ) error {
 	input := os.NewFile(stdinFD, "stdin")
 	program := tea.NewProgram(
-		app.NewModel(ctx, client, videoPlayer),
+		model,
 		tea.WithContext(ctx),
 		tea.WithInput(input),
 		tea.WithOutput(output),
 	)
 	_, err := program.Run()
 	return err
+}
+
+func newSessionFactory(
+	requestTimeout time.Duration,
+	newClient clientFactory,
+	newPlayer playerFactory,
+) app.SessionFactory {
+	return func(ctx context.Context, config app.ConnectionConfig) (app.Session, error) {
+		client, err := newClient(webdav.Config{
+			BaseURL:        config.BaseURL,
+			Username:       config.Username,
+			Password:       config.Password,
+			RequestTimeout: requestTimeout,
+		})
+		if err != nil {
+			return app.Session{}, fmt.Errorf("invalid WebDAV configuration: %w", err)
+		}
+		entries, err := client.ReadDir(ctx, nil)
+		if err != nil {
+			return app.Session{}, err
+		}
+		videoPlayer := newPlayer(config.Username, config.Password)
+		if videoPlayer == nil {
+			return app.Session{}, errors.New("configure video player: player is unavailable")
+		}
+		return app.Session{
+			Client:  client,
+			Player:  videoPlayer,
+			Entries: entries,
+		}, nil
+	}
 }
 
 func getPassword(

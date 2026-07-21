@@ -15,9 +15,10 @@ behavior.
 
 HTTP Basic.
 
-For the MVP, the password is requested without echo at startup and kept in
-memory for the session only. It does not need to be entered again for every
-directory or video.
+For the MVP, the password is entered through a masked TUI field. Direct CLI
+startup requests it without echo. In both cases, it remains in memory for the
+session only and does not need to be entered again for every directory or
+video.
 
 The `ARAG_PASSWORD` environment variable can provide the secret in automated
 environments. It must not be displayed, logged, or stored permanently in a

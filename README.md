@@ -26,7 +26,17 @@ See the [roadmap](docs/ROADMAP.md) for the planned scope.
 
 ## Run arag
 
-Run the current interactive root browser with:
+Launch the interactive connection screen with:
+
+```bash
+go run ./cmd/arag
+```
+
+Enter the WebDAV URL, username, and password, then select `Connect`. The
+password is masked and remains in memory only for the current session. A
+successful connection opens the server root in the file browser.
+
+Advanced users and automated environments can still start directly with:
 
 ```bash
 go run ./cmd/arag \
@@ -34,15 +44,15 @@ go run ./cmd/arag \
   -user "USERNAME"
 ```
 
-The password is then requested without being displayed. It remains in memory
-only while the command is running and is not stored. Once the interface opens,
-use the arrow keys or `j`/`k` to move the selection, `Enter` or `l` to open a
-directory, `i` to inspect the complete selected entry, the left arrow or `h`
-to return to the parent directory, and `q` to open the quit confirmation.
-`Ctrl+C` remains available for an immediate exit. Pressing `Enter` or
-`l` on an MKV or MP4 file opens a confirmation prompt. Confirming starts a
-temporary local stream and opens it in IINA. IINA receives neither the WebDAV
-password nor the remote media URL. Closing arag also stops the local stream.
+In direct mode, the password is requested without being displayed. Once the
+browser opens, use the arrow keys or `j`/`k` to move the selection, `Enter` or
+`l` to open a directory, `i` to inspect the complete selected entry, the left
+arrow or `h` to return to the parent directory, and `q` to open the quit
+confirmation. `Ctrl+C` remains available for an immediate exit. Pressing
+`Enter` or `l` on an MKV or MP4 file opens a confirmation prompt. Confirming
+starts a temporary local stream and opens it in IINA. IINA receives neither
+the WebDAV password nor the remote media URL. Closing arag also stops the local
+stream.
 
 To display all available options:
 
