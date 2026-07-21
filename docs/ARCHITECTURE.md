@@ -49,6 +49,11 @@ The player does not know about Bubble Tea.
 IINA is the first MVP implementation. The package contract must not depend on
 IINA, allowing VLC or another player to be added later.
 
+The IINA launcher accepts only tokenized HTTP URLs using an IP loopback
+address and an explicit port. It invokes `/usr/bin/open` directly with
+separate arguments and never through a shell. Remote URLs, credentials,
+queries, and fragments are rejected before process execution.
+
 Passing authentication to the player must not expose credentials in logs,
 error messages, or files. This requires a technical validation before the IINA
 integration is finalized.

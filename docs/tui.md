@@ -31,6 +31,10 @@ placeholder, so no external process is started yet. The UI displays the player
 result when the command completes. Unsupported file types do not open the
 confirmation prompt and produce an explanatory message instead.
 
+The IINA process launcher is implemented independently but is not connected to
+the proxy yet. It accepts only temporary loopback URLs and rejects direct
+WebDAV URLs or URLs containing credentials.
+
 ## Entry details
 
 Pressing `i` opens a details panel for the selected file or directory. The
