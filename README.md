@@ -10,7 +10,9 @@ supported preset because it is the project's initial use case.
 
 arag is under development. It can currently connect to a WebDAV server, browse
 directories, inspect entries, and open supported videos in IINA through a
-temporary authenticated streaming endpoint. The MVP provides:
+temporary authenticated streaming endpoint. Its responsive terminal interface
+adapts to light and dark backgrounds and keeps complete metadata available on
+both wide and narrow terminals. The MVP provides:
 
 - connection to a WebDAV server;
 - directory browsing without loading the entire tree;

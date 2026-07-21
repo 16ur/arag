@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	"image/color"
 	"net/url"
 	"strings"
 	"testing"
@@ -11,6 +12,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/16ur/arag/internal/player"
 	"github.com/16ur/arag/internal/webdav"
+	"github.com/charmbracelet/x/ansi"
 )
 
 type fakeDirectoryReader struct {
@@ -61,12 +63,8 @@ func TestModelLoadsAndSortsRootEntries(t *testing.T) {
 	}}
 	model := NewModel(context.Background(), reader, player.Unavailable{})
 
-	msg := model.Init()()
-	updated, command := model.Update(msg)
-	if command != nil {
-		t.Fatal("Update() command is not nil")
-	}
-	result := updated.(*Model)
+	runInit(t, model)
+	result := model
 	if reader.calls != 1 {
 		t.Fatalf("ReadDir() calls = %d, want 1", reader.calls)
 	}
@@ -74,8 +72,8 @@ func TestModelLoadsAndSortsRootEntries(t *testing.T) {
 		t.Fatalf("entries = %+v", result.entries)
 	}
 
-	view := result.View().Content
-	if !strings.Contains(view, "> [D]") || !strings.Contains(view, "2.0 KiB") {
+	view := viewText(result)
+	if !strings.Contains(view, "> Movies/") || !strings.Contains(view, "2.0 KiB") {
 		t.Errorf("View() = %q", view)
 	}
 }
@@ -103,8 +101,8 @@ func TestModelDisplaysAndRetriesError(t *testing.T) {
 
 	reader := &fakeDirectoryReader{err: webdav.ErrAuthentication}
 	model := NewModel(context.Background(), reader, player.Unavailable{})
-	model.Update(model.Init()())
-	if got := model.View().Content; !strings.Contains(got, "server rejected the credentials") {
+	runInit(t, model)
+	if got := viewText(model); !strings.Contains(got, "server rejected the credentials") {
 		t.Fatalf("View() = %q", got)
 	}
 
@@ -124,12 +122,24 @@ func TestModelDisplaysLoadingAndEmptyStates(t *testing.T) {
 	t.Parallel()
 
 	model := NewModel(context.Background(), &fakeDirectoryReader{}, player.Unavailable{})
-	if got := model.View().Content; !strings.Contains(got, "Loading directory") {
+	if got := viewText(model); !strings.Contains(got, "Loading directory") {
 		t.Fatalf("loading View() = %q", got)
 	}
 	model.Update(entriesLoadedMsg{})
-	if got := model.View().Content; !strings.Contains(got, "Empty directory") {
+	if got := viewText(model); !strings.Contains(got, "Empty directory") {
 		t.Fatalf("empty View() = %q", got)
+	}
+}
+
+func TestModelViewDoesNotPerformIO(t *testing.T) {
+	t.Parallel()
+
+	reader := &fakeDirectoryReader{}
+	model := NewModel(context.Background(), reader, player.Unavailable{})
+	_ = model.View()
+	_ = model.View()
+	if reader.calls != 0 {
+		t.Fatalf("View() performed %d directory requests", reader.calls)
 	}
 }
 
@@ -162,7 +172,7 @@ func TestModelNavigatesIntoDirectoryAndBack(t *testing.T) {
 	if len(model.entries) != 1 || model.entries[0].Name != "video.mkv" {
 		t.Fatalf("child entries = %+v", model.entries)
 	}
-	if !strings.Contains(model.View().Content, "Location: /webdav/Movies/") {
+	if !strings.Contains(viewText(model), "/webdav/Movies/") {
 		t.Fatalf("View() = %q", model.View().Content)
 	}
 
@@ -195,8 +205,8 @@ func TestModelAsksForConfirmationBeforeOpeningVideo(t *testing.T) {
 	if command != nil || model.pendingOpen == nil {
 		t.Fatalf("confirmation state = pending %v, command %v", model.pendingOpen, command)
 	}
-	view := model.View().Content
-	if !strings.Contains(view, "[ Open video? ]") ||
+	view := viewText(model)
+	if !strings.Contains(view, "Open video?") ||
 		!strings.Contains(view, "A Movie.MKV") ||
 		!strings.Contains(view, "2.0 GiB") {
 		t.Fatalf("View() = %q", view)
@@ -207,7 +217,7 @@ func TestModelAsksForConfirmationBeforeOpeningVideo(t *testing.T) {
 		t.Fatal("selection moved while confirmation was open")
 	}
 	model.Update(key("esc"))
-	if model.pendingOpen != nil || strings.Contains(model.View().Content, "[ Open video? ]") {
+	if model.pendingOpen != nil || strings.Contains(viewText(model), "Open video?") {
 		t.Fatal("Escape did not cancel confirmation")
 	}
 }
@@ -227,14 +237,14 @@ func TestModelConfirmsVideoThroughPlayer(t *testing.T) {
 	if command == nil || model.pendingOpen != nil || !model.opening {
 		t.Fatalf("confirmation state = pending %v, opening %v, command %v", model.pendingOpen, model.opening, command)
 	}
-	if !strings.Contains(model.View().Content, "Opening video") {
+	if !strings.Contains(viewText(model), "Opening video") {
 		t.Fatalf("View() = %q", model.View().Content)
 	}
 	model.Update(command())
 	if videoPlayer.calls != 1 || videoPlayer.openedURL.String() != mediaURL.String() {
 		t.Fatalf("player calls = %d, URL = %v", videoPlayer.calls, videoPlayer.openedURL)
 	}
-	if model.opening || !strings.Contains(model.View().Content, "Video sent to the player") {
+	if model.opening || !strings.Contains(viewText(model), "✓ Video sent to the player") {
 		t.Fatalf("View() = %q", model.View().Content)
 	}
 }
@@ -252,7 +262,7 @@ func TestModelDisplaysPlayerFailure(t *testing.T) {
 	model.Update(key("enter"))
 	_, command := model.Update(key("enter"))
 	model.Update(command())
-	if model.opening || !strings.Contains(model.View().Content, "Could not open video: launch failed") {
+	if model.opening || !strings.Contains(viewText(model), "! Could not open video: launch failed") {
 		t.Fatalf("View() = %q", model.View().Content)
 	}
 }
@@ -269,7 +279,7 @@ func TestModelDisplaysUnavailablePlayer(t *testing.T) {
 	model.Update(key("enter"))
 	_, command := model.Update(key("enter"))
 	model.Update(command())
-	if !strings.Contains(model.View().Content, "Player integration is not available yet") {
+	if !strings.Contains(viewText(model), "! Player integration is not available yet") {
 		t.Fatalf("View() = %q", model.View().Content)
 	}
 }
@@ -282,7 +292,7 @@ func TestModelRejectsUnsupportedFile(t *testing.T) {
 	if command != nil || model.pendingOpen != nil || model.opening {
 		t.Fatalf("unsupported file changed open state")
 	}
-	if !strings.Contains(model.View().Content, "Only MKV and MP4 videos") {
+	if !strings.Contains(viewText(model), "! Unsupported file type. Only MKV and MP4 videos") {
 		t.Fatalf("View() = %q", model.View().Content)
 	}
 }
@@ -316,7 +326,7 @@ func TestModelIgnoresStaleResponseAndCancelsPreviousRequest(t *testing.T) {
 		"/webdav/Movies/": {{Name: "current.mkv"}},
 	}}
 	model := NewModel(context.Background(), reader, player.Unavailable{})
-	staleCommand := model.Init()
+	staleCommand := model.startLoad(nil, 0)
 	currentCommand := model.startLoad(directory, 0)
 
 	staleMsg := staleCommand()
@@ -340,12 +350,90 @@ func TestModelAdaptsToSmallTerminal(t *testing.T) {
 	model := loadedModel("a-very-long-file-name.mkv", "second.mkv")
 	model.Update(tea.WindowSizeMsg{Width: 20, Height: 6})
 	model.Update(key("down"))
-	view := model.View().Content
+	view := viewText(model)
 	if strings.Contains(view, "a-very-long-file-name.mkv") {
 		t.Fatalf("long name was not truncated: %q", view)
 	}
-	if !strings.Contains(view, "> [F]") {
+	if !strings.Contains(view, "> second…") {
 		t.Fatalf("selection marker missing: %q", view)
+	}
+	if strings.Contains(view, "SELECTED") || strings.Contains(view, "│") {
+		t.Fatalf("small layout unexpectedly contains the details pane: %q", view)
+	}
+}
+
+func TestModelUsesSplitLayoutOnWideTerminal(t *testing.T) {
+	t.Parallel()
+
+	model := loadedModel("video.mkv")
+	model.Update(tea.WindowSizeMsg{Width: 120, Height: 20})
+	view := viewText(model)
+	if !strings.Contains(view, "SELECTED") || !strings.Contains(view, "│") {
+		t.Fatalf("wide layout does not contain the details pane: %q", view)
+	}
+}
+
+func TestModelKeepsRenderedDimensionsStable(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		width  int
+		height int
+		setup  func(*Model)
+	}{
+		{name: "wide browser", width: 120, height: 20},
+		{name: "compact browser", width: 24, height: 8},
+		{name: "notification", width: 96, height: 20, setup: func(model *Model) {
+			model.notice = "Unsupported file type."
+			model.noticeIsError = true
+		}},
+		{name: "dialog", width: 96, height: 20, setup: func(model *Model) {
+			model.confirmQuit = true
+		}},
+	}
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			model := loadedModel("video.mkv")
+			model.Update(tea.WindowSizeMsg{Width: test.width, Height: test.height})
+			if test.setup != nil {
+				test.setup(model)
+			}
+			lines := strings.Split(model.View().Content, "\n")
+			if len(lines) != test.height {
+				t.Fatalf("View() height = %d, want %d", len(lines), test.height)
+			}
+			for index, line := range lines {
+				if width := ansi.StringWidth(line); width != test.width {
+					t.Fatalf("line %d width = %d, want %d", index, width, test.width)
+				}
+			}
+		})
+	}
+}
+
+func TestModelUsesRequestedAccentForSelection(t *testing.T) {
+	t.Parallel()
+
+	model := loadedModel("video.mkv")
+	if !strings.Contains(model.View().Content, "48;2;18;129;130") {
+		t.Fatalf("selection does not use accent %s", accentColor)
+	}
+}
+
+func TestModelAdaptsThemeToTerminalBackground(t *testing.T) {
+	t.Parallel()
+
+	model := loadedModel("video.mkv")
+	model.Update(tea.BackgroundColorMsg{Color: color.White})
+	if model.darkBackground {
+		t.Fatal("light terminal background was detected as dark")
+	}
+	model.Update(tea.BackgroundColorMsg{Color: color.Black})
+	if !model.darkBackground {
+		t.Fatal("dark terminal background was detected as light")
 	}
 }
 
@@ -360,7 +448,7 @@ func TestModelTruncatesNamesToUniformMaximumWidth(t *testing.T) {
 	}})
 	model.Update(tea.WindowSizeMsg{Width: 120, Height: 20})
 
-	view := model.View().Content
+	view := viewText(model)
 	if strings.Contains(view, longName) || !strings.Contains(view, "…") {
 		t.Fatalf("name was not truncated: %q", view)
 	}
@@ -377,20 +465,20 @@ func TestModelDisplaysSizesForFilesOnly(t *testing.T) {
 		{Name: "Movies", IsCollection: true},
 		{Name: "video.mkv", Size: 2048},
 	}})
-	lines := strings.Split(model.View().Content, "\n")
+	lines := strings.Split(viewText(model), "\n")
 	var directoryLine, fileLine string
 	for _, line := range lines {
-		if strings.Contains(line, "Movies") {
+		if strings.Contains(line, "> Movies/") {
 			directoryLine = line
 		}
-		if strings.Contains(line, "video.mkv") {
+		if strings.Contains(line, "  video.mkv") {
 			fileLine = line
 		}
 	}
-	if directoryLine != "> [D] Movies" {
+	if !strings.Contains(directoryLine, "> Movies/") || strings.Contains(directoryLine, "0 B") {
 		t.Fatalf("directory line = %q", directoryLine)
 	}
-	if !strings.HasSuffix(fileLine, "2.0 KiB") {
+	if !strings.Contains(fileLine, "2.0 KiB") {
 		t.Fatalf("file line = %q", fileLine)
 	}
 }
@@ -413,15 +501,15 @@ func TestModelShowsCompleteEntryDetails(t *testing.T) {
 	}}})
 
 	model.Update(key("i"))
-	view := model.View().Content
+	view := viewText(model)
 	wanted := []string{
-		"[ Details ]",
-		"Name:     a-very-long-video-name.mkv",
-		"Type:     File",
-		"Size:     2.0 KiB",
-		"Modified: 2026-07-21T14:30:00Z",
-		"ETag:     video-tag",
-		"Path:     /webdav/Movies/a-very-long-video-name.mkv",
+		"Details",
+		"Name      a-very-long-video-name.mkv",
+		"Type      File",
+		"Size      2.0 KiB",
+		"Modified  2026-07-21T14:30:00Z",
+		"ETag      video-tag",
+		"Path      /webdav/Movies/a-very-long-video-name.mkv",
 	}
 	for _, value := range wanted {
 		if !strings.Contains(view, value) {
@@ -434,7 +522,7 @@ func TestModelShowsCompleteEntryDetails(t *testing.T) {
 		t.Fatal("selection moved while details were open")
 	}
 	model.Update(key("esc"))
-	if model.showDetails || strings.Contains(model.View().Content, "[ Details ]") {
+	if model.showDetails || strings.Contains(viewText(model), "Details") {
 		t.Fatal("Escape did not close details")
 	}
 }
@@ -453,10 +541,10 @@ func TestModelShowsRelevantDirectoryDetails(t *testing.T) {
 		IsCollection: true,
 	}}})
 	model.Update(key("i"))
-	view := model.View().Content
-	if !strings.Contains(view, "Type:     Directory") ||
-		!strings.Contains(view, "Size:     Not applicable") ||
-		!strings.Contains(view, "Modified: Not available") {
+	view := viewText(model)
+	if !strings.Contains(view, "Type      Directory") ||
+		!strings.Contains(view, "Size      Not applicable") ||
+		!strings.Contains(view, "Modified  Not available") {
 		t.Fatalf("View() = %q", view)
 	}
 }
@@ -467,9 +555,9 @@ func TestModelConfirmsBeforeQuitting(t *testing.T) {
 	model := loadedModel("file")
 	_, command := model.Update(key("q"))
 	if command != nil {
-		t.Fatal("q unexpectedly quit the application")
+		t.Fatal("q unexpectedly returned a command")
 	}
-	if !model.confirmQuit || !strings.Contains(model.View().Content, "[ Quit arag? ]") {
+	if !model.confirmQuit || !strings.Contains(viewText(model), "Quit arag?") {
 		t.Fatal("q did not open the quit confirmation")
 	}
 	select {
@@ -502,7 +590,7 @@ func TestModelCancelsQuitConfirmation(t *testing.T) {
 	if command != nil || model.confirmQuit {
 		t.Fatal("Escape did not cancel the quit confirmation")
 	}
-	if !model.showDetails || !strings.Contains(model.View().Content, "[ Details ]") {
+	if !model.showDetails || !strings.Contains(viewText(model), "Details") {
 		t.Fatal("canceling quit did not restore the previous view")
 	}
 	select {
@@ -538,6 +626,26 @@ func loadedModel(names ...string) *Model {
 	model := NewModel(context.Background(), &fakeDirectoryReader{}, player.Unavailable{})
 	model.Update(entriesLoadedMsg{entries: entries})
 	return model
+}
+
+func runInit(t *testing.T, model *Model) {
+	t.Helper()
+	message := model.Init()()
+	batch, ok := message.(tea.BatchMsg)
+	if !ok {
+		t.Fatalf("Init() returned %T, want tea.BatchMsg", message)
+	}
+	for _, command := range batch {
+		message := command()
+		switch message.(type) {
+		case entriesLoadedMsg, loadFailedMsg:
+			model.Update(message)
+		}
+	}
+}
+
+func viewText(model *Model) string {
+	return ansi.Strip(model.View().Content)
 }
 
 func key(value string) tea.KeyPressMsg {

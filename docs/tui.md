@@ -9,8 +9,7 @@ server. With the Seedhost preset, this is the seedbox WebDAV root.
 - `Enter` or `l`: enter a directory or select a file;
 - left arrow, `h`, or `Backspace`: return to the parent directory;
 - `i`: show or hide details for the selected entry;
-- `Esc`: close the details panel;
-- `?`: show or hide help;
+- `Esc`: close the details dialog;
 - `q`: open the quit confirmation;
 - `Ctrl+C`: interrupt and quit immediately.
 
@@ -41,8 +40,13 @@ when another video replaces it or when arag exits.
 
 ## Entry details
 
-Pressing `i` opens a details panel for the selected file or directory. The
-panel displays:
+On terminals at least 80 columns wide, a right-hand panel displays the selected
+entry's essential metadata: complete name, type, file size when relevant, and
+modification date. The file list uses 65% of the available width and the
+metadata panel uses the remaining 35%.
+
+Pressing `i` opens a centered details dialog for the selected file or
+directory. The dialog displays:
 
 - the complete name;
 - the entry type;
@@ -51,18 +55,21 @@ panel displays:
 - the ETag, when available;
 - the WebDAV path without credentials.
 
-The panel closes with `i` or `Esc`. Navigation keys do not change the
+The dialog closes with `i` or `Esc`. Navigation keys do not change the
 selection while it is open.
 
 ## List layout
 
-Directory rows display only their type marker and truncated name. arag does not
-calculate directory sizes because that would require recursively loading the
-remote tree.
+Directory names end with `/` and never display a size. arag does not calculate
+directory sizes because that would require recursively loading the remote
+tree.
 
 File rows also display their size, aligned to the right of the uniform name
-column. Complete names and other metadata remain available in the details
-panel.
+column. The selected row uses a full-width accent background and retains the
+`>` marker, so selection never depends on color alone.
+
+Below 80 columns, the metadata panel is hidden automatically and the file list
+uses the complete width. Complete metadata remains available with `i`.
 
 ## Display states
 
@@ -72,6 +79,10 @@ panel.
 - confirmation prompt;
 - entry details;
 - recoverable error.
+
+The header always displays a breadcrumb and a textual connection state.
+Successful actions and recoverable action errors appear in a one-line
+notification above the shortcut bar. Confirmations use centered dialogs.
 
 Errors distinguish at least:
 
@@ -86,6 +97,10 @@ password again, or return to the previous directory.
 
 ## Accessibility and layout
 
+- the interface keeps the terminal's own background and detects whether it is
+  light or dark before choosing secondary text and separator colors;
+- `#128182` is the only accent color;
+- the interface uses standard characters and does not require a Nerd Font;
 - no information depends on color alone;
 - the selection also has a textual marker;
 - long names are truncated cleanly without breaking the layout;

@@ -9,19 +9,11 @@ import (
 	"path"
 	"sort"
 	"strings"
-	"time"
 	"unicode"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/16ur/arag/internal/player"
 	"github.com/16ur/arag/internal/webdav"
-)
-
-const (
-	defaultVisibleRows = 10
-	maximumNameWidth   = 60
-	minimumNameWidth   = 4
-	fileSizeWidth      = 10
 )
 
 // DirectoryReader lists the contents of a WebDAV directory.
@@ -48,9 +40,11 @@ type Model struct {
 	pendingOpen      *webdav.Entry
 	opening          bool
 	notice           string
+	noticeIsError    bool
 	err              error
 	width            int
 	height           int
+	darkBackground   bool
 }
 
 type entriesLoadedMsg struct {
@@ -82,17 +76,19 @@ func NewModel(ctx context.Context, client DirectoryReader, videoPlayer player.Pl
 	}
 	ctx, cancel := context.WithCancel(ctx)
 	return &Model{
-		ctx:     ctx,
-		cancel:  cancel,
-		client:  client,
-		player:  videoPlayer,
-		loading: true,
+		ctx:            ctx,
+		cancel:         cancel,
+		client:         client,
+		player:         videoPlayer,
+		loading:        true,
+		darkBackground: true,
 	}
 }
 
-// Init starts loading the WebDAV root outside the rendering path.
+// Init detects the terminal theme and starts loading the WebDAV root outside
+// the rendering path.
 func (m *Model) Init() tea.Cmd {
-	return m.startLoad(nil, 0)
+	return tea.Batch(m.startLoad(nil, 0), tea.RequestBackgroundColor)
 }
 
 // Update handles WebDAV results, terminal resizing, and keyboard input.
@@ -117,47 +113,20 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case videoOpenedMsg:
 		m.opening = false
 		m.notice = "Video sent to the player."
+		m.noticeIsError = false
 	case videoOpenFailedMsg:
 		m.opening = false
 		m.notice = playerError(msg.err)
+		m.noticeIsError = true
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
+	case tea.BackgroundColorMsg:
+		m.darkBackground = msg.IsDark()
 	case tea.KeyPressMsg:
 		return m.handleKey(msg)
 	}
 	return m, nil
-}
-
-// View renders the current state without performing I/O or business logic.
-func (m *Model) View() tea.View {
-	var content strings.Builder
-	content.WriteString("arag\n")
-	fmt.Fprintf(&content, "Location: %s\n\n", m.location())
-
-	switch {
-	case m.confirmQuit:
-		m.renderQuitConfirmation(&content)
-	case m.loading:
-		content.WriteString("Loading directory...\n\nq quit")
-	case m.err != nil:
-		fmt.Fprintf(&content, "Error: %s\n\nr retry  •  h/← back  •  q quit", friendlyError(m.err))
-	case len(m.entries) == 0:
-		content.WriteString("Empty directory.\n\nh/← back  •  q quit")
-	case m.opening:
-		content.WriteString("Opening video...\n\nq quit")
-	case m.pendingOpen != nil:
-		m.renderConfirmation(&content)
-	case m.showDetails:
-		m.renderDetails(&content)
-	default:
-		m.renderEntries(&content)
-	}
-
-	view := tea.NewView(content.String())
-	view.AltScreen = true
-	view.WindowTitle = "arag"
-	return view
 }
 
 func (m *Model) startLoad(directory *url.URL, selected int) tea.Cmd {
@@ -172,7 +141,7 @@ func (m *Model) startLoad(directory *url.URL, selected int) tea.Cmd {
 	m.showDetails = false
 	m.pendingOpen = nil
 	m.opening = false
-	m.notice = ""
+	m.clearNotice()
 	m.err = nil
 
 	requestID := m.requestID
@@ -241,12 +210,12 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case "up", "k":
 		if !m.loading && m.err == nil && m.selected > 0 {
 			m.selected--
-			m.notice = ""
+			m.clearNotice()
 		}
 	case "down", "j":
 		if !m.loading && m.err == nil && m.selected < len(m.entries)-1 {
 			m.selected++
-			m.notice = ""
+			m.clearNotice()
 		}
 	case "enter", "l":
 		if !m.loading && m.err == nil && len(m.entries) > 0 {
@@ -271,9 +240,10 @@ func (m *Model) activateSelected() tea.Cmd {
 	if !entry.IsCollection {
 		if isVideoFile(entry.Name) {
 			m.pendingOpen = cloneEntry(&entry)
-			m.notice = ""
+			m.clearNotice()
 		} else {
 			m.notice = "Unsupported file type. Only MKV and MP4 videos can be opened."
+			m.noticeIsError = true
 		}
 		return nil
 	}
@@ -290,7 +260,7 @@ func (m *Model) activateSelected() tea.Cmd {
 
 func (m *Model) openVideo(entry *webdav.Entry) tea.Cmd {
 	m.opening = true
-	m.notice = ""
+	m.clearNotice()
 	mediaURL := cloneURL(entry.URL)
 	return func() tea.Msg {
 		if mediaURL == nil {
@@ -306,6 +276,11 @@ func (m *Model) openVideo(entry *webdav.Entry) tea.Cmd {
 	}
 }
 
+func (m *Model) clearNotice() {
+	m.notice = ""
+	m.noticeIsError = false
+}
+
 func (m *Model) goBack() (tea.Model, tea.Cmd) {
 	if len(m.history) == 0 {
 		return m, nil
@@ -315,107 +290,6 @@ func (m *Model) goBack() (tea.Model, tea.Cmd) {
 	m.history = m.history[:last]
 	m.currentDirectory = cloneURL(frame.directory)
 	return m, m.startLoad(m.currentDirectory, frame.selected)
-}
-
-func (m *Model) renderEntries(content *strings.Builder) {
-	start, end := visibleRange(m.selected, len(m.entries), m.visibleRows())
-	for index := start; index < end; index++ {
-		entry := m.entries[index]
-		marker := "  "
-		if index == m.selected {
-			marker = "> "
-		}
-		nameWidth := m.nameWidth()
-		name := truncate(displayText(entry.Name), nameWidth)
-		if entry.IsCollection {
-			fmt.Fprintf(content, "%s[D] %s\n", marker, name)
-			continue
-		}
-		fmt.Fprintf(content, "%s[F] %-*s %*s\n", marker, nameWidth, name, fileSizeWidth, formatSize(entry.Size))
-	}
-	if m.notice != "" {
-		fmt.Fprintf(content, "\n%s", m.notice)
-	}
-	content.WriteString("\n↑/k up  •  ↓/j down  •  enter/l open  •  i details  •  h/← back  •  q quit")
-}
-
-func (m *Model) renderConfirmation(content *strings.Builder) {
-	content.WriteString("[ Open video? ]\n\n")
-	fmt.Fprintf(content, "%s\n", displayText(m.pendingOpen.Name))
-	fmt.Fprintf(content, "Size: %s\n", formatSize(m.pendingOpen.Size))
-	content.WriteString("\nenter confirm  •  esc cancel  •  q quit")
-}
-
-func (m *Model) renderQuitConfirmation(content *strings.Builder) {
-	content.WriteString("[ Quit arag? ]\n\n")
-	content.WriteString("Your current navigation session will be closed.\n")
-	content.WriteString("\nenter confirm  •  esc cancel")
-}
-
-func (m *Model) renderDetails(content *strings.Builder) {
-	entry := m.entries[m.selected]
-	entryType := "File"
-	size := formatSize(entry.Size)
-	if entry.IsCollection {
-		entryType = "Directory"
-		size = "Not applicable"
-	}
-	modified := "Not available"
-	if !entry.ModTime.IsZero() {
-		modified = entry.ModTime.Format(time.RFC3339)
-	}
-	etag := displayText(entry.ETag)
-	if etag == "" {
-		etag = "Not available"
-	}
-	path := "Not available"
-	if entry.URL != nil {
-		path = displayText(entry.URL.Path)
-	}
-
-	content.WriteString("[ Details ]\n\n")
-	fmt.Fprintf(content, "Name:     %s\n", displayText(entry.Name))
-	fmt.Fprintf(content, "Type:     %s\n", entryType)
-	fmt.Fprintf(content, "Size:     %s\n", size)
-	fmt.Fprintf(content, "Modified: %s\n", modified)
-	fmt.Fprintf(content, "ETag:     %s\n", etag)
-	fmt.Fprintf(content, "Path:     %s\n", path)
-	content.WriteString("\ni close  •  esc close  •  q quit")
-}
-
-func (m *Model) location() string {
-	if m.currentDirectory == nil {
-		return "/"
-	}
-	if m.currentDirectory.Path == "" {
-		return "/"
-	}
-	return displayText(m.currentDirectory.Path)
-}
-
-func (m *Model) visibleRows() int {
-	if m.height <= 0 {
-		return defaultVisibleRows
-	}
-	rows := m.height - 6
-	if rows < 1 {
-		return 1
-	}
-	return rows
-}
-
-func (m *Model) nameWidth() int {
-	if m.width <= 0 {
-		return maximumNameWidth
-	}
-	width := m.width - 17
-	if width < minimumNameWidth {
-		return minimumNameWidth
-	}
-	if width > maximumNameWidth {
-		return maximumNameWidth
-	}
-	return width
 }
 
 func sortedEntries(entries []webdav.Entry) []webdav.Entry {
@@ -478,17 +352,6 @@ func isVideoFile(name string) bool {
 	default:
 		return false
 	}
-}
-
-func truncate(value string, width int) string {
-	runes := []rune(value)
-	if len(runes) <= width {
-		return value
-	}
-	if width <= 1 {
-		return "…"
-	}
-	return string(runes[:width-1]) + "…"
 }
 
 func displayText(value string) string {

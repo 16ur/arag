@@ -9,6 +9,7 @@ Bubble Tea V2.
 Responsibilities:
 
 - rendering;
+- adaptive terminal styling;
 - navigation;
 - keyboard shortcuts;
 - loading, confirmation, and error states.
@@ -18,6 +19,11 @@ The UI does not know about WebDAV XML.
 `View()` only produces a representation of the current state. It does not
 start network requests or contain business logic. Bubble Tea commands execute
 side effects.
+
+The UI requests the terminal background color during initialization. `Update()`
+stores whether that background is light or dark, and `View()` selects the
+corresponding presentation styles without performing terminal I/O. Lip Gloss
+handles ANSI styling, Unicode-aware widths, and responsive panel composition.
 
 ---
 
