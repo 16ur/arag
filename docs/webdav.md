@@ -62,3 +62,14 @@ authentication failures and invalid XML responses.
 
 These limits are configurable. They apply to WebDAV navigation, not to media
 playback duration in the external player.
+
+## Authenticated media streaming
+
+External players do not receive the WebDAV username or password. arag exposes
+the selected remote media through a temporary HTTP endpoint on `127.0.0.1` and
+adds Basic authentication to the upstream request itself.
+
+The local endpoint forwards `Range` and `If-Range` requests as well as the
+response headers required for seeking, including `Content-Range`,
+`Content-Length`, and `Accept-Ranges`. It uses `Accept-Encoding: identity` so
+that byte offsets remain meaningful.

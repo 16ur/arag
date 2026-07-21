@@ -1,6 +1,6 @@
 # Architecture
 
-The project is divided into four main responsibilities.
+The project is divided into five main responsibilities.
 
 ## UI
 
@@ -55,6 +55,25 @@ integration is finalized.
 
 ---
 
+## Streaming proxy
+
+Responsibilities:
+
+- expose one fixed remote media URL through a temporary loopback URL;
+- add WebDAV authentication only to upstream requests;
+- forward byte-range requests and media response headers;
+- prevent credentials from reaching the external player;
+- stop the local endpoint when its context is canceled.
+
+The proxy listens only on `127.0.0.1`, uses a random port and a cryptographically
+random path token, and accepts only `GET` and `HEAD`. It never acts as a general
+forward proxy. Cross-origin upstream redirects are rejected.
+
+The proxy streams response bodies directly and does not load complete media
+files into memory. Navigation timeouts do not apply to media bodies.
+
+---
+
 ## Configuration
 
 Responsibilities:
@@ -73,4 +92,7 @@ to it in plain text.
 3. The client runs `PROPFIND` and returns Go values.
 4. `Update()` incorporates the result into the UI state.
 5. `View()` renders that state.
-6. After a file is confirmed, the player opens it with the selected player.
+6. After a file is confirmed, the streaming proxy creates a temporary local
+   URL for the authenticated remote media.
+7. The player opens the temporary local URL without receiving WebDAV
+   credentials.

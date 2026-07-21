@@ -88,3 +88,27 @@ Use these initial values:
 
 These values are configurable. Media playback does not use the navigation
 timeout because its duration is managed by the external player.
+
+---
+
+# ADR 007: Loopback proxy for authenticated playback
+
+## Context
+
+Passing WebDAV credentials in a media URL or player command-line argument can
+expose them through process inspection, logs, errors, or player history.
+Different external players also support HTTP authentication differently.
+
+## Decision
+
+arag exposes each selected media URL through a temporary HTTP endpoint bound
+only to `127.0.0.1`. The endpoint uses a random port and a cryptographically
+random token. It adds Basic authentication only when requesting the fixed
+remote media URL.
+
+The proxy supports `GET`, `HEAD`, and HTTP byte ranges so that external players
+can seek without downloading the complete file. It rejects cross-origin
+redirects and never operates as a general-purpose proxy.
+
+External players receive only the temporary loopback URL. They never receive
+WebDAV credentials.

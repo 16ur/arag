@@ -15,6 +15,7 @@
 - [x] details panel for the selected file or directory
 - [x] confirmation before opening a video
 - [x] player contract connected to the confirmation flow
+- [x] authenticated loopback streaming proxy with byte-range support
 - [ ] open videos in IINA without exposing credentials
 - [x] unit tests for the XML parser
 - [x] integration tests with a local fake WebDAV server
