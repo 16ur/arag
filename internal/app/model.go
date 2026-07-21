@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"path"
 	"sort"
 	"strings"
 	"time"
@@ -41,6 +42,9 @@ type Model struct {
 	targetSelection  int
 	loading          bool
 	showDetails      bool
+	pendingOpen      *webdav.Entry
+	confirmedEntry   *webdav.Entry
+	notice           string
 	err              error
 	width            int
 	height           int
@@ -117,11 +121,13 @@ func (m *Model) View() tea.View {
 
 	switch {
 	case m.loading:
-		content.WriteString("Loading directory...\n\nq quit")
+		content.WriteString("Loading directory...\n\nctrl+q quit")
 	case m.err != nil:
-		fmt.Fprintf(&content, "Error: %s\n\nr retry  •  h/← back  •  q quit", friendlyError(m.err))
+		fmt.Fprintf(&content, "Error: %s\n\nr retry  •  h/← back  •  ctrl+q quit", friendlyError(m.err))
 	case len(m.entries) == 0:
-		content.WriteString("Empty directory.\n\nh/← back  •  q quit")
+		content.WriteString("Empty directory.\n\nh/← back  •  ctrl+q quit")
+	case m.pendingOpen != nil:
+		m.renderConfirmation(&content)
 	case m.showDetails:
 		m.renderDetails(&content)
 	default:
@@ -144,6 +150,9 @@ func (m *Model) startLoad(directory *url.URL, selected int) tea.Cmd {
 	m.targetSelection = selected
 	m.loading = true
 	m.showDetails = false
+	m.pendingOpen = nil
+	m.confirmedEntry = nil
+	m.notice = ""
 	m.err = nil
 
 	requestID := m.requestID
@@ -169,9 +178,20 @@ func (m *Model) finishRequest() {
 
 func (m *Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	keystroke := msg.Keystroke()
-	if keystroke == "q" || keystroke == "ctrl+c" {
+	if keystroke == "ctrl+q" || keystroke == "ctrl+c" {
 		m.cancel()
 		return m, tea.Quit
+	}
+	if m.pendingOpen != nil {
+		switch keystroke {
+		case "enter":
+			m.confirmedEntry = cloneEntry(m.pendingOpen)
+			m.pendingOpen = nil
+			m.notice = "Video confirmed. Player integration is not available yet."
+		case "esc":
+			m.pendingOpen = nil
+		}
+		return m, nil
 	}
 	if m.showDetails {
 		if keystroke == "i" || keystroke == "esc" {
@@ -184,14 +204,16 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case "up", "k":
 		if !m.loading && m.err == nil && m.selected > 0 {
 			m.selected--
+			m.notice = ""
 		}
 	case "down", "j":
 		if !m.loading && m.err == nil && m.selected < len(m.entries)-1 {
 			m.selected++
+			m.notice = ""
 		}
 	case "enter", "l":
 		if !m.loading && m.err == nil && len(m.entries) > 0 {
-			return m, m.openSelected()
+			return m, m.activateSelected()
 		}
 	case "left", "h", "backspace":
 		return m.goBack()
@@ -207,9 +229,18 @@ func (m *Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m *Model) openSelected() tea.Cmd {
+func (m *Model) activateSelected() tea.Cmd {
 	entry := m.entries[m.selected]
-	if !entry.IsCollection || entry.URL == nil {
+	if !entry.IsCollection {
+		if isVideoFile(entry.Name) {
+			m.pendingOpen = cloneEntry(&entry)
+			m.notice = ""
+		} else {
+			m.notice = "Unsupported file type. Only MKV and MP4 videos can be opened."
+		}
+		return nil
+	}
+	if entry.URL == nil {
 		return nil
 	}
 	m.history = append(m.history, navigationFrame{
@@ -247,7 +278,17 @@ func (m *Model) renderEntries(content *strings.Builder) {
 		}
 		fmt.Fprintf(content, "%s[F] %-*s %*s\n", marker, nameWidth, name, fileSizeWidth, formatSize(entry.Size))
 	}
-	content.WriteString("\n↑/k up  •  ↓/j down  •  enter/l open  •  i details  •  h/← back  •  q quit")
+	if m.notice != "" {
+		fmt.Fprintf(content, "\n%s", m.notice)
+	}
+	content.WriteString("\n↑/k up  •  ↓/j down  •  enter/l open  •  i details  •  h/← back  •  ctrl+q quit")
+}
+
+func (m *Model) renderConfirmation(content *strings.Builder) {
+	content.WriteString("[ Open video? ]\n\n")
+	fmt.Fprintf(content, "%s\n", displayText(m.pendingOpen.Name))
+	fmt.Fprintf(content, "Size: %s\n", formatSize(m.pendingOpen.Size))
+	content.WriteString("\nenter confirm  •  esc cancel  •  ctrl+q quit")
 }
 
 func (m *Model) renderDetails(content *strings.Builder) {
@@ -278,7 +319,7 @@ func (m *Model) renderDetails(content *strings.Builder) {
 	fmt.Fprintf(content, "Modified: %s\n", modified)
 	fmt.Fprintf(content, "ETag:     %s\n", etag)
 	fmt.Fprintf(content, "Path:     %s\n", path)
-	content.WriteString("\ni close  •  esc close  •  q quit")
+	content.WriteString("\ni close  •  esc close  •  ctrl+q quit")
 }
 
 func (m *Model) location() string {
@@ -358,6 +399,24 @@ func cloneURL(value *url.URL) *url.URL {
 	}
 	copy := *value
 	return &copy
+}
+
+func cloneEntry(value *webdav.Entry) *webdav.Entry {
+	if value == nil {
+		return nil
+	}
+	copy := *value
+	copy.URL = cloneURL(value.URL)
+	return &copy
+}
+
+func isVideoFile(name string) bool {
+	switch strings.ToLower(path.Ext(name)) {
+	case ".mkv", ".mp4":
+		return true
+	default:
+		return false
+	}
 }
 
 func truncate(value string, width int) string {

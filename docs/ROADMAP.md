@@ -13,7 +13,7 @@
 - [ ] built-in help and discoverable shortcuts
 - [x] layout suitable for small terminals and long names
 - [x] details panel for the selected file or directory
-- [ ] confirmation before opening a video
+- [x] confirmation before opening a video
 - [ ] open videos in IINA without exposing credentials
 - [x] unit tests for the XML parser
 - [x] integration tests with a local fake WebDAV server

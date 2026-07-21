@@ -36,7 +36,9 @@ The password is then requested without being displayed. It remains in memory
 only while the command is running and is not stored. Once the interface opens,
 use the arrow keys or `j`/`k` to move the selection, `Enter` or `l` to open a
 directory, `i` to inspect the complete selected entry, the left arrow or `h`
-to return to the parent directory, and `q` to quit.
+to return to the parent directory, and `Ctrl+Q` to quit. Pressing `Enter` or
+`l` on an MKV or MP4 file opens a confirmation prompt. Player launch is not
+connected yet.
 
 To display all available options:
 

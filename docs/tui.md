@@ -11,7 +11,8 @@ server. With the Seedhost preset, this is the seedbox WebDAV root.
 - `i`: show or hide details for the selected entry;
 - `Esc`: close the details panel;
 - `?`: show or hide help;
-- `q`: quit.
+- `Ctrl+Q`: quit;
+- `Ctrl+C`: interrupt and quit.
 
 The help view must list the shortcuts that are actually implemented. Arrow
 keys remain available so that the interface is accessible to users who do not
@@ -19,9 +20,14 @@ know Vim.
 
 ## Opening media
 
-For a supported video file, `Enter` displays a confirmation before opening it
-in IINA. The confirmation clearly identifies the file and allows cancellation
-without side effects.
+MKV and MP4 files are recognized as supported videos, regardless of extension
+case. For a supported video file, `Enter` or `l` displays a confirmation before
+opening it in IINA. The confirmation clearly identifies the complete file name
+and size. `Enter` confirms and `Esc` cancels without side effects.
+
+Until the player integration is implemented, confirmation is recorded only in
+the UI state and no external process is started. Unsupported file types do not
+open the confirmation prompt and produce an explanatory message instead.
 
 ## Entry details
 

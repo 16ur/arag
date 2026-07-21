@@ -169,13 +169,80 @@ func TestModelNavigatesIntoDirectoryAndBack(t *testing.T) {
 	}
 }
 
-func TestModelDoesNotOpenFile(t *testing.T) {
+func TestModelAsksForConfirmationBeforeOpeningVideo(t *testing.T) {
 	t.Parallel()
 
-	model := loadedModel("video.mkv")
+	model := NewModel(context.Background(), &fakeDirectoryReader{})
+	model.Update(entriesLoadedMsg{entries: []webdav.Entry{{
+		Name: "A Movie.MKV",
+		Size: 2 << 30,
+	}}})
+
 	_, command := model.Update(key("enter"))
-	if command != nil || len(model.history) != 0 {
-		t.Fatalf("file opened: command = %v, history = %+v", command, model.history)
+	if command != nil || model.pendingOpen == nil || model.confirmedEntry != nil {
+		t.Fatalf("confirmation state = pending %v, confirmed %v, command %v", model.pendingOpen, model.confirmedEntry, command)
+	}
+	view := model.View().Content
+	if !strings.Contains(view, "[ Open video? ]") ||
+		!strings.Contains(view, "A Movie.MKV") ||
+		!strings.Contains(view, "2.0 GiB") {
+		t.Fatalf("View() = %q", view)
+	}
+
+	model.Update(key("down"))
+	if model.selected != 0 {
+		t.Fatal("selection moved while confirmation was open")
+	}
+	model.Update(key("esc"))
+	if model.pendingOpen != nil || strings.Contains(model.View().Content, "[ Open video? ]") {
+		t.Fatal("Escape did not cancel confirmation")
+	}
+}
+
+func TestModelConfirmsVideoWithoutStartingPlayer(t *testing.T) {
+	t.Parallel()
+
+	model := loadedModel("video.mp4")
+	model.Update(key("enter"))
+	_, command := model.Update(key("enter"))
+	if command != nil || model.pendingOpen != nil || model.confirmedEntry == nil {
+		t.Fatalf("confirmation state = pending %v, confirmed %v, command %v", model.pendingOpen, model.confirmedEntry, command)
+	}
+	if model.confirmedEntry.Name != "video.mp4" {
+		t.Fatalf("confirmed entry = %+v", model.confirmedEntry)
+	}
+	if !strings.Contains(model.View().Content, "Player integration is not available yet") {
+		t.Fatalf("View() = %q", model.View().Content)
+	}
+}
+
+func TestModelRejectsUnsupportedFile(t *testing.T) {
+	t.Parallel()
+
+	model := loadedModel("subtitle.srt")
+	_, command := model.Update(key("enter"))
+	if command != nil || model.pendingOpen != nil || model.confirmedEntry != nil {
+		t.Fatalf("unsupported file changed open state")
+	}
+	if !strings.Contains(model.View().Content, "Only MKV and MP4 videos") {
+		t.Fatalf("View() = %q", model.View().Content)
+	}
+}
+
+func TestIsVideoFile(t *testing.T) {
+	t.Parallel()
+
+	tests := map[string]bool{
+		"movie.mkv":      true,
+		"movie.MP4":      true,
+		"movie.mkv.part": false,
+		"subtitle.srt":   false,
+		"no-extension":   false,
+	}
+	for name, want := range tests {
+		if got := isVideoFile(name); got != want {
+			t.Errorf("isVideoFile(%q) = %v, want %v", name, got, want)
+		}
 	}
 }
 
@@ -341,6 +408,16 @@ func TestModelQuits(t *testing.T) {
 
 	model := loadedModel("file")
 	_, command := model.Update(key("q"))
+	if command != nil {
+		t.Fatal("plain q unexpectedly quit the application")
+	}
+	select {
+	case <-model.ctx.Done():
+		t.Fatal("plain q canceled the model context")
+	default:
+	}
+
+	_, command = model.Update(key("ctrl+q"))
 	if command == nil {
 		t.Fatal("quit command is nil")
 	}
@@ -365,6 +442,9 @@ func loadedModel(names ...string) *Model {
 }
 
 func key(value string) tea.KeyPressMsg {
+	if value == "ctrl+q" {
+		return tea.KeyPressMsg(tea.Key{Code: 'q', Mod: tea.ModCtrl})
+	}
 	keyCodes := map[string]rune{
 		"up":        tea.KeyUp,
 		"down":      tea.KeyDown,
