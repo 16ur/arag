@@ -3,7 +3,9 @@ package app
 import (
 	"context"
 	"errors"
+	"fmt"
 	"image/color"
+	"net"
 	"net/url"
 	"strings"
 	"testing"
@@ -703,6 +705,81 @@ func runInit(t *testing.T, model *Model) {
 		case entriesLoadedMsg, loadFailedMsg:
 			model.Update(message)
 		}
+	}
+}
+
+func TestFriendlyError(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		err  error
+		want string
+	}{
+		{
+			name: "invalid URL",
+			err:  fmt.Errorf("%w: scheme must be http or https", webdav.ErrInvalidURL),
+			want: "the WebDAV URL is invalid",
+		},
+		{
+			name: "rejected authentication",
+			err:  fmt.Errorf("%w: HTTP 401", webdav.ErrAuthentication),
+			want: "the server rejected the credentials",
+		},
+		{
+			name: "unexpected status",
+			err:  fmt.Errorf("%w: HTTP 500", webdav.ErrUnexpectedStatus),
+			want: "the server did not return a valid WebDAV response",
+		},
+		{
+			name: "invalid WebDAV response",
+			err:  fmt.Errorf("%w: root element must be DAV: multistatus", webdav.ErrInvalidResponse),
+			want: "the WebDAV XML response is invalid",
+		},
+		{
+			name: "context deadline",
+			err:  fmt.Errorf("execute PROPFIND: %w", context.DeadlineExceeded),
+			want: "the server took too long to respond",
+		},
+		{
+			name: "canceled",
+			err:  context.Canceled,
+			want: "operation canceled",
+		},
+		{
+			name: "network timeout",
+			err:  fmt.Errorf("execute PROPFIND: %w", &net.DNSError{Err: "timed out", Name: "example.com", IsTimeout: true}),
+			want: "the server took too long to respond",
+		},
+		{
+			name: "unavailable server",
+			err:  fmt.Errorf("execute PROPFIND: %w", &net.DNSError{Err: "no such host", Name: "example.com", IsNotFound: true}),
+			want: "the server is unreachable",
+		},
+		{
+			name: "unavailable server through url error",
+			err: fmt.Errorf("execute PROPFIND: %w", &url.Error{
+				Op:  "Get",
+				URL: "https://example.com/webdav/",
+				Err: &net.OpError{Op: "dial", Net: "tcp", Err: errors.New("connection refused")},
+			}),
+			want: "the server is unreachable",
+		},
+		{
+			name: "unknown error is sanitized",
+			err:  errors.New("boom\x1b[31m"),
+			want: "boom�[31m",
+		},
+	}
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			if got := friendlyError(test.err); got != test.want {
+				t.Fatalf("friendlyError() = %q, want %q", got, test.want)
+			}
+		})
 	}
 }
 

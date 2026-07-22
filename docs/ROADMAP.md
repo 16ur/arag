@@ -41,6 +41,6 @@
 - [x] no network requests or business logic in `View()`
 - [ ] no secrets in files, logs, or error messages
 - [x] no information communicated through color alone
-- [ ] distinct errors for invalid URLs, rejected authentication, unavailable
+- [x] distinct errors for invalid URLs, rejected authentication, unavailable
       servers, and invalid WebDAV responses
 - [x] navigation usable without knowing Vim shortcuts

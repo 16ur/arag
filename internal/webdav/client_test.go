@@ -202,14 +202,16 @@ func TestNewClientValidation(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name   string
-		config Config
+		name           string
+		config         Config
+		wantInvalidURL bool
 	}{
-		{name: "missing scheme", config: Config{BaseURL: "example.com/webdav"}},
-		{name: "unsupported scheme", config: Config{BaseURL: "ftp://example.com/webdav"}},
-		{name: "missing host", config: Config{BaseURL: "https:///webdav"}},
-		{name: "credentials in URL", config: Config{BaseURL: "https://user:secret@example.com/webdav"}},
-		{name: "query", config: Config{BaseURL: "https://example.com/webdav?token=secret"}},
+		{name: "missing scheme", config: Config{BaseURL: "example.com/webdav"}, wantInvalidURL: true},
+		{name: "unsupported scheme", config: Config{BaseURL: "ftp://example.com/webdav"}, wantInvalidURL: true},
+		{name: "missing host", config: Config{BaseURL: "https:///webdav"}, wantInvalidURL: true},
+		{name: "credentials in URL", config: Config{BaseURL: "https://user:secret@example.com/webdav"}, wantInvalidURL: true},
+		{name: "query", config: Config{BaseURL: "https://example.com/webdav?token=secret"}, wantInvalidURL: true},
+		{name: "unparsable URL", config: Config{BaseURL: "https://user:se%zzcret@example.com/webdav"}, wantInvalidURL: true},
 		{name: "negative timeout", config: Config{BaseURL: "https://example.com/webdav", RequestTimeout: -time.Second}},
 	}
 
@@ -217,8 +219,15 @@ func TestNewClientValidation(t *testing.T) {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
-			if _, err := NewClient(test.config); err == nil {
+			_, err := NewClient(test.config)
+			if err == nil {
 				t.Fatal("NewClient() error = nil")
+			}
+			if got := errors.Is(err, ErrInvalidURL); got != test.wantInvalidURL {
+				t.Fatalf("errors.Is(err, ErrInvalidURL) = %v, want %v (err = %v)", got, test.wantInvalidURL, err)
+			}
+			if strings.Contains(err.Error(), "secret") {
+				t.Fatalf("NewClient() error leaks credentials: %v", err)
 			}
 		})
 	}

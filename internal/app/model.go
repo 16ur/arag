@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"net/url"
 	"path"
 	"sort"
@@ -470,7 +471,10 @@ func formatSize(size int64) string {
 }
 
 func friendlyError(err error) string {
+	var netErr net.Error
 	switch {
+	case errors.Is(err, webdav.ErrInvalidURL):
+		return "the WebDAV URL is invalid"
 	case errors.Is(err, webdav.ErrAuthentication):
 		return "the server rejected the credentials"
 	case errors.Is(err, webdav.ErrUnexpectedStatus):
@@ -481,8 +485,12 @@ func friendlyError(err error) string {
 		return "the server took too long to respond"
 	case errors.Is(err, context.Canceled):
 		return "operation canceled"
+	case errors.As(err, &netErr) && netErr.Timeout():
+		return "the server took too long to respond"
+	case errors.As(err, &netErr):
+		return "the server is unreachable"
 	default:
-		return err.Error()
+		return displayText(err.Error())
 	}
 }
 

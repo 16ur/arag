@@ -23,6 +23,8 @@ const (
 )
 
 var (
+	// ErrInvalidURL indicates that the configured WebDAV URL is unusable.
+	ErrInvalidURL = errors.New("invalid webdav url")
 	// ErrAuthentication indicates that the server rejected the credentials.
 	ErrAuthentication = errors.New("webdav authentication failed")
 	// ErrUnexpectedStatus indicates that the server did not return a WebDAV
@@ -64,19 +66,21 @@ type Client struct {
 func NewClient(config Config) (*Client, error) {
 	baseURL, err := url.Parse(config.BaseURL)
 	if err != nil {
-		return nil, fmt.Errorf("parse WebDAV URL: %w", err)
+		// The url.Parse error is dropped because it quotes the raw URL,
+		// which may embed credentials.
+		return nil, fmt.Errorf("%w: malformed URL", ErrInvalidURL)
 	}
 	if baseURL.Scheme != "http" && baseURL.Scheme != "https" {
-		return nil, fmt.Errorf("parse WebDAV URL: scheme must be http or https")
+		return nil, fmt.Errorf("%w: scheme must be http or https", ErrInvalidURL)
 	}
 	if baseURL.Host == "" {
-		return nil, fmt.Errorf("parse WebDAV URL: host is required")
+		return nil, fmt.Errorf("%w: host is required", ErrInvalidURL)
 	}
 	if baseURL.User != nil {
-		return nil, fmt.Errorf("parse WebDAV URL: credentials must not be included in the URL")
+		return nil, fmt.Errorf("%w: credentials must not be included in the URL", ErrInvalidURL)
 	}
 	if baseURL.RawQuery != "" || baseURL.Fragment != "" {
-		return nil, fmt.Errorf("parse WebDAV URL: query and fragment are not supported")
+		return nil, fmt.Errorf("%w: query and fragment are not supported", ErrInvalidURL)
 	}
 
 	baseURL.Path = ensureTrailingSlash(baseURL.Path)
